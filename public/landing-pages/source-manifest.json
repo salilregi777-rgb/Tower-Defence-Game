@@ -1,0 +1,5 @@
+{
+  "source_url": "https://threeui.com/landing-pages/inner-green-3d.html",
+  "original_sha256": "c5de3e42e1a088aeb2fe6a0430dedc03664ed02c59ec0fb9432b5724fb51ed61",
+  "note": "Original kept byte-for-byte. Adapted page localizes the three remote media URLs, adjusts game copy, and adds a shared renderer hook; authored shaders and geometry remain intact."
+}

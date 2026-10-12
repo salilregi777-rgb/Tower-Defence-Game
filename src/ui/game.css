@@ -1,0 +1,158 @@
+/* A quiet layer of etched glass over the living Sylva scene. */
+#sylva-game-ui{--ui-ink:#f3f4e9;--ui-muted:#bac0aa;--ui-dim:#87917d;--ui-line:rgba(228,236,207,.17);--ui-glass:rgba(32,43,28,.76);--ui-gold:#ded6aa;position:fixed;inset:0;z-index:100;font-family:'Lexend',sans-serif;font-weight:300;color:var(--ui-ink);font-size:12px;line-height:1.5;pointer-events:none;opacity:0;visibility:hidden;transition:opacity .7s ease,visibility .7s;user-select:none;-webkit-font-smoothing:antialiased}
+#sylva-game-ui.is-visible{opacity:1;visibility:visible}
+#sylva-game-ui *{box-sizing:border-box}
+#sylva-game-ui button,#sylva-game-ui select,#sylva-game-ui input{font:inherit;color:inherit}
+#sylva-game-ui button{border:0;cursor:pointer;transition:background .2s,transform .22s,color .2s,border-color .2s;touch-action:manipulation}
+#sylva-game-ui button:hover:not(:disabled){transform:translateY(-2px)}
+#sylva-game-ui button:active:not(:disabled){transform:translateY(1px)}
+#sylva-game-ui button:disabled{opacity:.34;cursor:not-allowed}
+#sylva-game-ui button:focus-visible,#sylva-game-ui select:focus-visible,#sylva-game-ui input:focus-visible{outline:2px solid var(--ui-gold);outline-offset:4px}
+#sylva-game-ui [hidden]{display:none!important}
+#sylva-game-ui .sg-glass{pointer-events:auto;background:linear-gradient(140deg,rgba(69,81,53,.68),rgba(29,39,25,.83));border:1px solid var(--ui-line);box-shadow:0 12px 40px #0c140d25,inset 0 1px 0 #ffffff0b;backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px)}
+#sylva-game-ui .sg-icon{width:18px;height:18px;stroke:currentColor;stroke-width:1.5;fill:none;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;vertical-align:middle}
+#sylva-game-ui .sg-eyebrow{text-transform:uppercase;font-size:9px;font-weight:400;letter-spacing:2px;color:var(--ui-muted)}
+#sylva-game-ui .sg-icon-button{height:36px;width:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:12px;background:rgba(225,235,198,.045);color:var(--ui-muted)}
+#sylva-game-ui .sg-icon-button:hover{background:rgba(233,241,208,.13);color:var(--ui-ink)}
+#sylva-game-ui .sg-button{background:rgba(222,232,199,.08);border:1px solid var(--ui-line);border-radius:13px;padding:10px 14px;display:inline-flex;gap:8px;align-items:center;justify-content:center;white-space:nowrap}
+#sylva-game-ui .sg-button:hover{background:rgba(222,232,199,.17)}
+#sylva-game-ui .sg-primary{background:#ecf0df;color:#263221;border:1px solid #ecf0df;box-shadow:0 4px 18px #0a100e15}
+#sylva-game-ui .sg-primary:hover{background:#fff!important}
+#sylva-game-ui .sg-topbar{position:absolute;top:24px;left:28px;right:28px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start;pointer-events:none}
+#sylva-game-ui .sg-brand{display:flex;align-items:center;gap:12px;padding:8px 15px 8px 8px;border-radius:18px;pointer-events:auto}
+#sylva-game-ui .sg-home{background:#eff1e5;color:#36462c;border-radius:12px;width:37px;height:37px;display:grid;place-items:center}
+#sylva-game-ui .sg-wordmark{font-size:12px;letter-spacing:3px;font-weight:400}
+#sylva-game-ui .sg-world{font-size:9px;letter-spacing:.5px;color:var(--ui-muted)}
+#sylva-game-ui .sg-counters{display:flex;align-items:center;border-radius:18px;padding:10px 8px;min-height:55px;pointer-events:auto}
+#sylva-game-ui .sg-counter{display:flex;align-items:center;gap:10px;padding:0 20px;border-right:1px solid var(--ui-line)}
+#sylva-game-ui .sg-counter:last-child{border:0}
+#sylva-game-ui .sg-counter>div{display:flex;flex-direction:column}
+#sylva-game-ui .sg-counter .sg-icon{width:19px;height:19px;color:#c4d39e}
+#sylva-game-ui .sg-counter-label{font-size:8px;line-height:1.1;letter-spacing:1.5px;text-transform:uppercase;color:var(--ui-muted)}
+#sylva-game-ui .sg-counter-value{font-size:18px;line-height:1.4;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+#sylva-game-ui .sg-counter-value small{font-size:10px;color:var(--ui-dim);margin-left:2px}
+#sylva-game-ui .sg-tools{display:flex;gap:4px;border-radius:17px;padding:8px}
+#sylva-game-ui .sg-inspector-toggle{padding:0 11px;width:auto;gap:8px;font-size:9px;letter-spacing:1.4px}
+#sylva-game-ui .sg-inspector-toggle[aria-pressed=true]{background:#e3e8d6;color:#263321}
+#sylva-game-ui .sg-mobile-menu{display:none}
+#sylva-game-ui .sg-guidance{position:absolute;left:32px;top:112px;max-width:255px;pointer-events:none;text-shadow:0 2px 15px #0008;transition:opacity .4s}
+#sylva-game-ui .sg-guidance h2{font-weight:300;font-size:27px;line-height:1.2;letter-spacing:-1px;margin:10px 0}
+#sylva-game-ui .sg-guidance p{color:#c5cbb9;line-height:1.7;font-size:11px;max-width:230px;margin:0}
+#sylva-game-ui .sg-guidance-step{display:flex;align-items:center;gap:9px;color:var(--ui-gold);font-size:9px;letter-spacing:1.5px;text-transform:uppercase}
+#sylva-game-ui .sg-guidance-step:before{content:'';width:5px;height:5px;border-radius:50%;background:#dbe9b8;box-shadow:0 0 15px #dbe9b8}
+#sylva-game-ui .sg-guidance .sg-dismiss{pointer-events:auto;background:none;color:var(--ui-muted);font-size:9px;letter-spacing:1px;padding:0;margin-top:16px;border-bottom:1px solid var(--ui-line)}
+#sylva-game-ui .sg-dock-wrap{position:absolute;left:50%;bottom:26px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:10px;max-width:calc(100% - 330px)}
+#sylva-game-ui .sg-build-hint{font-size:10px;color:#e6eadb;padding:7px 14px;background:rgba(25,35,21,.66);border:1px solid var(--ui-line);border-radius:20px;backdrop-filter:blur(12px);pointer-events:auto}
+#sylva-game-ui .sg-build-hint button{background:none;padding:0 0 0 8px;color:var(--ui-gold);font-size:11px}
+#sylva-game-ui .sg-dock{display:flex;border-radius:24px;padding:7px;gap:5px}
+#sylva-game-ui .sg-tower-button{width:112px;position:relative;text-align:left;border-radius:18px;background:transparent;padding:13px 12px 10px;overflow:hidden;border:1px solid transparent}
+#sylva-game-ui .sg-tower-button:hover{background:#c7d5ab13}
+#sylva-game-ui .sg-tower-button.is-armed{border-color:#dbe2bc88;background:linear-gradient(140deg,#d2dfaa32,#dbe6b812);box-shadow:inset 0 0 20px #d8e1b305,0 0 20px #b6d18512}
+#sylva-game-ui .sg-tower-button .sg-tower-art{width:40px;height:43px;display:block;margin:0 auto 9px;color:#d1dcb9;stroke-width:1.15;transition:transform .35s cubic-bezier(.2,1.8,.5,1)}
+#sylva-game-ui .sg-tower-button:hover .sg-tower-art{transform:translateY(-3px) rotate(-3deg)}
+#sylva-game-ui .sg-tower-button .sg-tower-name{display:block;font-size:10px;font-weight:400;white-space:nowrap}
+#sylva-game-ui .sg-tower-meta{display:flex;justify-content:space-between;align-items:center;margin-top:4px;color:var(--ui-muted);font-size:9px}
+#sylva-game-ui .sg-tower-price{color:var(--ui-gold)}
+#sylva-game-ui .sg-tower-key{position:absolute;top:8px;right:9px;font-size:8px;color:#aab99b77}
+#sylva-game-ui .sg-history{position:absolute;bottom:29px;left:29px;display:flex;gap:4px;padding:6px;border-radius:16px}
+#sylva-game-ui .sg-history .sg-icon-button{width:37px;height:35px}
+#sylva-game-ui .sg-history small{font-size:8px;line-height:1;padding-left:3px;opacity:.65}
+#sylva-game-ui .sg-camera{position:absolute;right:29px;bottom:29px;display:flex;gap:3px;padding:6px;border-radius:16px}
+#sylva-game-ui .sg-camera .sg-icon-button{width:30px;height:35px}
+#sylva-game-ui .sg-wave-control{position:absolute;right:30px;bottom:101px;width:182px;padding:13px;border-radius:19px}
+#sylva-game-ui .sg-wave-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+#sylva-game-ui .sg-wave-label{font-size:9px;color:var(--ui-muted)}
+#sylva-game-ui .sg-speed{background:none;color:var(--ui-gold);font-size:10px;min-width:31px;padding:4px}
+#sylva-game-ui .sg-wave-actions{display:flex;gap:7px}
+#sylva-game-ui .sg-wave-start{flex:1;font-size:10px;padding:10px 7px}
+#sylva-game-ui .sg-pause{height:39px;width:35px;flex-shrink:0}
+#sylva-game-ui .sg-progress{height:2px;border-radius:2px;background:#d3dfb117;margin-top:12px;overflow:hidden}
+#sylva-game-ui .sg-progress span{display:block;background:linear-gradient(90deg,#8aaa59,#dce6b8);height:100%;width:0;transition:width .5s}
+#sylva-game-ui .sg-selection{position:absolute;right:30px;top:108px;width:246px;padding:20px;border-radius:23px;max-height:calc(100% - 335px);overflow-y:auto;animation:sg-reveal .35s ease}
+#sylva-game-ui .sg-panel-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#sylva-game-ui .sg-panel-top .sg-icon-button{width:26px;height:26px;border-radius:9px}
+#sylva-game-ui .sg-selection h2{font-weight:300;font-size:22px;letter-spacing:-.7px;line-height:1.15;margin:13px 0 5px}
+#sylva-game-ui .sg-selection .sg-description{font-size:10px;color:var(--ui-muted);line-height:1.65;margin:0 0 15px}
+#sylva-game-ui .sg-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:12px 0;border-top:1px solid var(--ui-line);border-bottom:1px solid var(--ui-line);margin-bottom:14px}
+#sylva-game-ui .sg-stats strong{display:block;font-weight:300;font-size:16px}
+#sylva-game-ui .sg-stats small{font-size:8px;color:var(--ui-muted)}
+#sylva-game-ui .sg-target-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:17px;font-size:9px;color:var(--ui-muted)}
+#sylva-game-ui select{background:#18241566;border:1px solid var(--ui-line);padding:6px 20px 6px 9px;border-radius:8px;max-width:140px;cursor:pointer;outline:none}
+#sylva-game-ui select option{color:#e6e9de;background:#293524}
+#sylva-game-ui .sg-upgrade-heading{font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:var(--ui-muted);margin-bottom:8px}
+#sylva-game-ui .sg-upgrade{display:block;width:100%;text-align:left;padding:10px;border:1px solid var(--ui-line);background:#d9e4c005;border-radius:11px;margin-bottom:7px}
+#sylva-game-ui .sg-upgrade:hover{background:#d9e4c013}
+#sylva-game-ui .sg-upgrade>span{display:flex;justify-content:space-between;gap:6px;font-size:10px}
+#sylva-game-ui .sg-upgrade em{font-style:normal;color:var(--ui-gold);font-size:9px}
+#sylva-game-ui .sg-upgrade small{font-size:8px;color:var(--ui-muted);display:block;margin-top:4px;line-height:1.5}
+#sylva-game-ui .sg-sell{background:none;width:100%;font-size:9px;color:var(--ui-muted);padding:10px 0 0}
+#sylva-game-ui .sg-sell:hover{color:var(--ui-gold)}
+#sylva-game-ui .sg-max-upgrade{font-size:10px;color:#c1d3a8;padding:8px 0 12px}
+#sylva-game-ui .sg-branch-label{font-size:8px;color:#b6c89c;margin-bottom:11px}
+#sylva-game-ui .sg-inspector{position:absolute;left:29px;top:108px;width:346px;bottom:103px;border-radius:24px;padding:20px;display:flex;flex-direction:column;animation:sg-reveal .3s ease;overflow:hidden}
+#sylva-game-ui .sg-inspector h2{font-weight:300;font-size:22px;letter-spacing:-.5px;margin:9px 0 2px}
+#sylva-game-ui .sg-inspector-intro{font-size:10px;color:var(--ui-muted);margin:0 0 14px}
+#sylva-game-ui .sg-inspector-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding-bottom:14px;border-bottom:1px solid var(--ui-line)}
+#sylva-game-ui .sg-inspector-tabs button{border:1px solid #c9dab00d;background:#c9dab007;font-size:8px;color:var(--ui-muted);padding:8px 4px;border-radius:8px;white-space:nowrap}
+#sylva-game-ui .sg-inspector-tabs button[aria-selected=true]{background:#dfe6cf;color:#283824}
+#sylva-game-ui .sg-structure-body{overflow:auto;flex:1;padding-top:15px;scrollbar-width:thin;scrollbar-color:#71845b55 transparent}
+#sylva-game-ui .sg-structure-meta{display:flex;align-items:center;justify-content:space-between;font-size:10px;margin-bottom:10px}
+#sylva-game-ui .sg-complexity{font-size:9px;font-family:ui-monospace,SFMono-Regular,monospace;color:var(--ui-gold);white-space:nowrap}
+#sylva-game-ui .sg-operation-select{width:100%;max-width:100%;font-size:10px;margin-bottom:9px}
+#sylva-game-ui .sg-algorithm-copy{font-size:10px;line-height:1.8;color:var(--ui-muted);margin:0 0 14px;user-select:text}
+#sylva-game-ui .sg-structure-view{padding:13px 10px;background:rgba(11,23,12,.25);border:1px solid #c5d5a70d;border-radius:13px;min-height:90px;overflow:auto}
+#sylva-game-ui .sg-nodes{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+#sylva-game-ui .sg-node{display:inline-flex;flex-direction:column;justify-content:center;align-items:center;border:1px solid #a4b98244;background:#abbf8a12;min-width:36px;padding:7px 8px;border-radius:8px;font-size:10px;color:#e0e8cd;animation:sg-node-in .2s ease;white-space:nowrap}
+#sylva-game-ui .sg-node small{font-size:7px;color:#aab998;white-space:nowrap}
+#sylva-game-ui .sg-node.is-active{border-color:#ddeac1;background:#cadd9d22;box-shadow:0 0 12px #d8e9ac10}
+#sylva-game-ui .sg-node-arrow{font-size:10px;color:#9caf7e}
+#sylva-game-ui .sg-empty{font-size:10px;color:var(--ui-dim);line-height:1.8;margin:7px 0;text-align:center}
+#sylva-game-ui .sg-data-note{font-size:8px;line-height:1.7;color:var(--ui-dim);margin-top:10px}
+#sylva-game-ui .sg-tree-node{margin-left:12px;padding-left:11px;border-left:1px solid #b1c29633;margin-top:7px;position:relative}
+#sylva-game-ui .sg-tree-node:before{content:'';position:absolute;left:0;top:17px;width:8px;border-top:1px solid #b1c29633}
+#sylva-game-ui .sg-tree-node>span:first-child{font-size:8px;color:var(--ui-dim);margin-right:6px}
+#sylva-game-ui .sg-tree-root{margin-left:0;padding-left:0;border-left:none}
+#sylva-game-ui .sg-tree-root:before{display:none}
+#sylva-game-ui .sg-heap-level{display:flex;justify-content:center;gap:7px;margin:9px 0;position:relative}
+#sylva-game-ui .sg-heap-level+.sg-heap-level:before{content:'↙   ↘';position:absolute;top:-13px;color:#8d9e76;font-size:9px}
+#sylva-game-ui .sg-stack-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#sylva-game-ui .sg-stack-column{display:flex;flex-direction:column;gap:5px;text-align:center}
+#sylva-game-ui .sg-stack-column>small{color:var(--ui-muted);font-size:8px;margin-bottom:6px}
+#sylva-game-ui .sg-grid{display:grid;gap:2px;aspect-ratio:1.4;width:100%}
+#sylva-game-ui .sg-grid-cell{background:#52683b30;border-radius:2px;min-width:0;transition:background .2s}
+#sylva-game-ui .sg-grid-cell.is-path{background:#bdc99c57}
+#sylva-game-ui .sg-grid-cell.is-visited{background:#d9e6b799}
+#sylva-game-ui .sg-grid-cell.is-route{background:#e0eab9}
+#sylva-game-ui .sg-grid-cell.is-obstacle{background:#12220fa0}
+#sylva-game-ui .sg-grid-cell.is-tower{background:#bdb389}
+#sylva-game-ui .sg-inspector-footer{padding-top:13px;margin-top:13px;border-top:1px solid var(--ui-line);display:flex;align-items:center;gap:7px;font-size:8px;color:var(--ui-dim)}
+#sylva-game-ui .sg-live-dot{width:4px;height:4px;border-radius:50%;background:#cbdcaf;box-shadow:0 0 8px #cbdcaf66}
+#sylva-game-ui .sg-bfs-play{margin-top:10px;width:100%;padding:8px;font-size:9px}
+#sylva-game-ui .sg-history-search{display:flex;gap:7px;margin-top:12px}
+#sylva-game-ui .sg-history-search input{width:100%;min-width:0;border:1px solid var(--ui-line);border-radius:8px;background:#15241144;padding:8px 10px;font-size:10px;user-select:text}
+#sylva-game-ui .sg-history-search button{font-size:9px;padding:8px}
+#sylva-game-ui .sg-history-result{font-size:10px;color:var(--ui-muted);line-height:1.7;margin-top:9px}
+#sylva-game-ui .sg-notice{position:absolute;left:50%;top:102px;transform:translateX(-50%) translateY(-8px);max-width:450px;padding:11px 19px;border-radius:14px;text-align:center;background:rgba(29,41,23,.9);border:1px solid #c6d6a750;color:#e4ecd4;font-size:11px;opacity:0;transition:opacity .25s,transform .25s;backdrop-filter:blur(15px)}
+#sylva-game-ui .sg-notice.is-visible{opacity:1;transform:translateX(-50%) translateY(0)}
+#sylva-game-ui .sg-overlay{position:absolute;inset:0;pointer-events:auto;display:grid;place-items:center;padding:25px;background:rgba(13,23,13,.42);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);animation:sg-reveal .3s}
+#sylva-game-ui .sg-modal{width:min(500px,100%);max-height:90vh;overflow:auto;padding:34px;border-radius:30px;position:relative}
+#sylva-game-ui .sg-modal-close{position:absolute;right:20px;top:20px}
+#sylva-game-ui .sg-modal h2{font-size:40px;line-height:1.12;font-weight:300;letter-spacing:-1.8px;margin:15px 0}
+#sylva-game-ui .sg-modal p{color:var(--ui-muted);font-size:12px;line-height:1.8;margin-bottom:22px}
+#sylva-game-ui .sg-help-step{display:flex;gap:14px;margin:18px 0;align-items:flex-start}
+#sylva-game-ui .sg-help-step>span{height:26px;width:26px;flex-shrink:0;border:1px solid var(--ui-line);border-radius:50%;display:grid;place-items:center;color:var(--ui-gold);font-size:9px}
+#sylva-game-ui .sg-help-step h3{font-size:12px;font-weight:400;margin:0 0 5px}
+#sylva-game-ui .sg-help-step p{font-size:10px;margin:0}
+#sylva-game-ui .sg-shortcuts{font-size:9px;color:var(--ui-dim);line-height:2;border-top:1px solid var(--ui-line);padding-top:15px;margin-top:20px}
+#sylva-game-ui .sg-modal-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+#sylva-game-ui .sg-modal-actions .sg-button{font-size:11px}
+#sylva-game-ui .sg-end-icon{width:52px;height:52px;color:#d3dfb7;margin-bottom:10px}
+#sylva-game-ui .sg-end-stats{display:flex;gap:30px;padding:20px 0;border-top:1px solid var(--ui-line);border-bottom:1px solid var(--ui-line)}
+#sylva-game-ui .sg-end-stats strong{font-size:25px;font-weight:300;display:block}
+#sylva-game-ui .sg-end-stats small{font-size:9px;color:var(--ui-muted)}
+@keyframes sg-reveal{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
+@keyframes sg-node-in{from{opacity:.4}to{opacity:1}}
+@media(max-width:1150px){#sylva-game-ui .sg-topbar{left:20px;right:20px;top:20px}#sylva-game-ui .sg-counter{padding:0 13px}#sylva-game-ui .sg-tools{gap:1px;padding:8px 5px}#sylva-game-ui .sg-tools .sg-icon-button{width:31px}#sylva-game-ui .sg-tools .sg-inspector-toggle{width:35px;padding:0}#sylva-game-ui .sg-inspector-toggle span{display:none}#sylva-game-ui .sg-tower-button{width:99px;padding:11px 9px 9px}#sylva-game-ui .sg-dock-wrap{max-width:none}#sylva-game-ui .sg-selection{width:220px;right:20px;padding:17px}#sylva-game-ui .sg-inspector{left:20px;width:310px}#sylva-game-ui .sg-guidance{left:25px;max-width:210px}#sylva-game-ui .sg-guidance h2{font-size:24px}#sylva-game-ui .sg-wave-control{right:20px;width:160px}#sylva-game-ui .sg-wave-start{font-size:9px}#sylva-game-ui .sg-history{left:20px}#sylva-game-ui .sg-camera{right:20px}}
+@media(max-width:850px){#sylva-game-ui .sg-brand{padding:7px}#sylva-game-ui .sg-brand-copy{display:none}#sylva-game-ui .sg-counter{padding:0 10px;gap:6px}#sylva-game-ui .sg-counter .sg-icon{width:15px}#sylva-game-ui .sg-counter-value{font-size:16px}#sylva-game-ui .sg-counter-label{font-size:7px}#sylva-game-ui .sg-tools .sg-tool-secondary{display:none}#sylva-game-ui .sg-mobile-menu{display:inline-flex}#sylva-game-ui .sg-topbar{gap:7px;left:16px;right:16px;top:16px}#sylva-game-ui .sg-dock-wrap{bottom:18px}#sylva-game-ui .sg-tower-button{width:92px}#sylva-game-ui .sg-wave-control{right:16px;bottom:160px;width:160px}#sylva-game-ui .sg-camera{right:16px;bottom:99px}#sylva-game-ui .sg-history{left:16px;bottom:160px}#sylva-game-ui .sg-selection{right:16px;top:91px;max-height:calc(100% - 365px);width:213px;padding:15px}#sylva-game-ui .sg-guidance{left:20px;top:100px;max-width:175px}#sylva-game-ui .sg-guidance p{font-size:10px}#sylva-game-ui .sg-guidance h2{font-size:23px}#sylva-game-ui .sg-inspector{top:91px;left:16px;bottom:152px;width:300px;padding:17px}#sylva-game-ui .sg-inspector h2{font-size:20px}#sylva-game-ui .sg-inspector-intro{margin-bottom:10px}}
+@media(max-width:560px){#sylva-game-ui .sg-topbar{top:11px;left:10px;right:10px;gap:5px}#sylva-game-ui .sg-brand{border-radius:14px;padding:5px}#sylva-game-ui .sg-home{width:32px;height:32px;border-radius:10px}#sylva-game-ui .sg-counters{padding:8px 2px;min-height:44px;border-radius:14px;flex:1;justify-content:center}#sylva-game-ui .sg-counter{padding:0 9px;gap:4px}#sylva-game-ui .sg-counter .sg-icon{display:none}#sylva-game-ui .sg-counter-value{font-size:15px;line-height:1.3}#sylva-game-ui .sg-counter-label{font-size:6px;letter-spacing:1px}#sylva-game-ui .sg-tools{padding:5px;border-radius:14px;gap:0}#sylva-game-ui .sg-tools .sg-icon-button{height:32px;width:30px}#sylva-game-ui .sg-sound-tool{display:none}#sylva-game-ui .sg-dock{gap:1px;padding:5px;border-radius:21px}#sylva-game-ui .sg-dock-wrap{width:calc(100% - 22px);bottom:12px;gap:7px}#sylva-game-ui .sg-tower-button{width:calc((100vw - 37px)/4);padding:9px 7px 8px;border-radius:16px}#sylva-game-ui .sg-tower-button .sg-tower-art{height:31px;width:30px;margin-bottom:7px}#sylva-game-ui .sg-tower-button .sg-tower-name{font-size:8px}#sylva-game-ui .sg-tower-meta{font-size:8px;margin-top:3px}#sylva-game-ui .sg-tower-key{font-size:7px;top:6px;right:6px}#sylva-game-ui .sg-build-hint{font-size:8px;padding:6px 9px}#sylva-game-ui .sg-wave-control{right:11px;bottom:138px;width:156px;padding:10px;border-radius:16px}#sylva-game-ui .sg-wave-heading{margin-bottom:6px}#sylva-game-ui .sg-wave-start{padding:9px 6px}#sylva-game-ui .sg-pause{height:36px}#sylva-game-ui .sg-history{left:11px;bottom:138px;padding:4px}#sylva-game-ui .sg-camera{display:none}#sylva-game-ui .sg-guidance{left:17px;top:83px;max-width:190px}#sylva-game-ui .sg-guidance h2{font-size:22px;margin:8px 0}#sylva-game-ui .sg-guidance p{font-size:9px;line-height:1.6}#sylva-game-ui .sg-guidance-step{font-size:7px}#sylva-game-ui .sg-guidance .sg-dismiss{font-size:8px;margin-top:10px}#sylva-game-ui .sg-selection{top:78px;right:11px;width:211px;max-height:calc(100% - 330px);border-radius:19px}#sylva-game-ui.has-selection .sg-guidance{opacity:0}#sylva-game-ui .sg-selection h2{font-size:20px}#sylva-game-ui .sg-selection .sg-description{font-size:9px;margin-bottom:11px}#sylva-game-ui .sg-selection .sg-stats{padding:8px 0;margin-bottom:10px}#sylva-game-ui .sg-target-row{margin-bottom:10px}#sylva-game-ui .sg-inspector{top:76px;left:11px;right:11px;width:auto;bottom:132px;border-radius:20px;padding:16px;z-index:3}#sylva-game-ui .sg-inspector-tabs{padding-bottom:10px;gap:4px}#sylva-game-ui .sg-inspector-intro{font-size:9px;margin-bottom:10px}#sylva-game-ui .sg-structure-body{padding-top:11px}#sylva-game-ui .sg-modal{padding:26px;border-radius:24px}#sylva-game-ui .sg-modal h2{font-size:34px}#sylva-game-ui .sg-modal p{font-size:11px}#sylva-game-ui .sg-notice{top:70px;font-size:10px;max-width:calc(100% - 40px);width:max-content}}
+@media(prefers-reduced-motion:reduce){#sylva-game-ui,#sylva-game-ui *{animation-duration:.01ms!important;transition-duration:.01ms!important}}
