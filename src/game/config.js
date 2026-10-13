@@ -1,5 +1,16 @@
 import { BinaryTree } from '../dsa/structures.js';
 
+export const DEFAULT_DIFFICULTY = 3;
+// Multipliers are applied once when a wave is queued or an enemy is created.
+// Seeds are earned through play; difficulty never requires a purchase.
+export const DIFFICULTIES = Object.freeze(Object.fromEntries([
+  { value: 1, name: 'Gentle', label: 'Gentle', description: 'A little room to learn. Build, experiment, and protect the grove.', hp: 0.9, speed: 0.95, spawn: 1.12, count: 1, reward: 1.1 },
+  { value: 2, name: 'Guarded', label: 'Guarded', description: 'A steady challenge. Grow new defenses as the blight gathers.', hp: 1.1, speed: 1, spawn: 1, count: 1, reward: 1.05 },
+  { value: 3, name: 'Resolute', label: 'Resolute', description: 'The intended challenge. Reinvest your seeds and upgrade your defenses.', hp: 1.35, speed: 1.04, spawn: 0.9, count: 1, reward: 1 },
+  { value: 4, name: 'Relentless', label: 'Relentless', description: 'Hardier invaders arrive in greater numbers. Every seed matters.', hp: 1.7, speed: 1.09, spawn: 0.82, count: 1.1, reward: 0.93 },
+  { value: 5, name: 'Siege', label: 'Siege', description: 'The forest is under siege. Plan your positions, timing, and upgrades.', hp: 2.2, speed: 1.14, spawn: 0.74, count: 1.2, reward: 0.85 },
+].map(profile => [profile.value, Object.freeze(profile)])));
+
 export const TOWER_TYPES = Object.freeze({
   archer: { name: 'Thornspire', subtitle: 'Archer', cost: 55, damage: 18, range: 3.8, interval: 0.58, color: '#cadf93', description: 'Fast living thorns seek a single invader. Long reach, precise damage.' },
   cannon: { name: 'Rootbreaker', subtitle: 'Cannon', cost: 105, damage: 62, range: 3.25, interval: 1.8, color: '#e6bb7f', description: 'Lobs seedpods in a high arc. Explosions damage every enemy nearby.' },
@@ -32,16 +43,17 @@ export function createUpgradeTrees() {
   return result;
 }
 
-export function generateWave(wave) {
-  const entries = [], count = 6 + wave * 3;
+export function generateWave(wave, difficulty = DEFAULT_DIFFICULTY) {
+  const profile = DIFFICULTIES[difficulty] || DIFFICULTIES[DEFAULT_DIFFICULTY];
+  const entries = [], count = Math.round((6 + wave * 3) * profile.count);
   for (let i = 0; i < count; i++) {
     let type = 'basic';
     if (wave >= 2 && i % 4 === 2) type = 'runner';
     if (wave >= 3 && i % 6 === 4) type = 'tank';
     if (wave >= 4 && i % 5 === 3) type = 'resistant';
-    entries.push({ type, delay: Math.max(0.38, 0.95 - wave * 0.045), ordinal: i + 1 });
+    entries.push({ type, delay: Math.max(0.38, 0.95 - wave * 0.045) * profile.spawn, ordinal: i + 1 });
   }
-  if (wave % 5 === 0) entries.splice(Math.floor(entries.length * 0.65), 0, { type: 'boss', delay: 1.6, ordinal: count + 1 });
+  if (wave % 5 === 0) entries.splice(Math.floor(entries.length * 0.65), 0, { type: 'boss', delay: 1.6 * profile.spawn, ordinal: count + 1 });
   return entries;
 }
 

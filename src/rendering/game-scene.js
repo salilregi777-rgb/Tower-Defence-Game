@@ -15,13 +15,16 @@ export function createGameScene(world, engine, callbacks = {}) {
   let randomSeed = 742191;
   const rand = (a = 0, b = 1) => { randomSeed = (Math.imul(randomSeed, 1664525) + 1013904223) >>> 0; return a + randomSeed / 4294967296 * (b - a); };
   const noise = (x, z) => Math.sin(x * .79 + Math.cos(z * .61) * 1.8) * .45 + Math.sin(z * 1.51 + x * .24) * .24 + Math.cos(x * 2.37 - z * .67) * .16;
-  const mat = (color, options = {}) => { const m = new THREE.MeshStandardMaterial({ color, roughness: .9, metalness: 0, ...options }); ownedMaterials.add(m); return m; };
-  const basic = (color, options = {}) => { const m = new THREE.MeshBasicMaterial({ color, ...options }); ownedMaterials.add(m); return m; };
+  // The authored renderer uses legacy r149 colour management. Convert authored
+  // sRGB swatches explicitly so its ACES exposure does not bleach the clearing.
+  const mat = (color, options = {}) => { const m = new THREE.MeshStandardMaterial({ color, roughness: .9, metalness: 0, ...options }); m.color.convertSRGBToLinear(); m.emissive.convertSRGBToLinear(); ownedMaterials.add(m); return m; };
+  const basic = (color, options = {}) => { const m = new THREE.MeshBasicMaterial({ color, ...options }); m.color.convertSRGBToLinear(); ownedMaterials.add(m); return m; };
   const geom = g => { ownedGeometries.add(g); return g; };
   const sphere = geom(new THREE.SphereGeometry(1, 14, 10)), ico = geom(new THREE.IcosahedronGeometry(1, 1));
   const softTexture = world.radialTexture(128, [[0, 'rgba(255,255,255,1)'], [.22, 'rgba(255,255,255,.6)'], [1, 'rgba(255,255,255,0)']]); ownedTextures.add(softTexture);
   const shadowTexture = world.radialTexture(128, [[0, 'rgba(0,0,0,.8)'], [.38, 'rgba(0,0,0,.4)'], [1, 'rgba(0,0,0,0)']]); ownedTextures.add(shadowTexture);
   const wood = mat('#494b2d'), darkWood = mat('#353b25'), moss = mat('#596b32'), rock = mat('#797d65'), leaf = mat('#879956', { side: THREE.DoubleSide }), paleLeaf = mat('#b9c78b', { side: THREE.DoubleSide });
+  const cutStone = mat('#777b65'), iron = mat('#505348', {metalness:.4,roughness:.65});
   const gold = mat('#dab784', { emissive: '#795d22', emissiveIntensity: .22 }), frost = mat('#b0dbe0', { emissive: '#65a8b8', emissiveIntensity: .32, roughness: .34 }), violet = mat('#d6c6e3', { emissive: '#8872b1', emissiveIntensity: .4, roughness: .45 });
 
   // Fine bark ridges and mineral grain are shaded at world scale, never painted
@@ -32,10 +35,10 @@ export function createGameScene(world, engine, callbacks = {}) {
       shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vSylvaPos;\nfloat sylvaHash(vec3 p) { return fract(sin(dot(p,vec3(12.9898,78.233,45.164))) * 43758.5453); }').replace('#include <color_fragment>', `#include <color_fragment>\nfloat sylvaGrain = sylvaHash(floor(vSylvaPos * ${scale.toFixed(1)}));\nfloat sylvaRidge = ${bark ? 'sin(vSylvaPos.y * 2.0 + sin(vSylvaPos.x * 31.0) * 1.9 + vSylvaPos.z * 37.0)' : 'sin(vSylvaPos.x * 5.0 + sin(vSylvaPos.z * 9.0) * 2.0)'};\ndiffuseColor.rgb *= 1.0 + (sylvaGrain - .5) * ${amount.toFixed(2)} + sylvaRidge * .075;`);
     };
   }
-  grainMaterial(wood, .26, 110, true); grainMaterial(darkWood, .25, 100, true); grainMaterial(rock, .24, 35); grainMaterial(moss, .15, 80);
-  const light = new THREE.HemisphereLight(0xd7dec5, 0x414c31, .95); group.add(light);
-  const key = new THREE.DirectionalLight(0xffedc7, 2.1); key.position.set(-7, 18, 10); key.target.position.set(0, 0, 0); group.add(key, key.target);
-  const fill = new THREE.DirectionalLight(0xabc8b8, .5); fill.position.set(9, 6, -10); group.add(fill);
+  grainMaterial(cutStone,.32,65); grainMaterial(wood, .26, 110, true); grainMaterial(darkWood, .25, 100, true); grainMaterial(rock, .24, 35); grainMaterial(moss, .15, 80);
+  const light = new THREE.HemisphereLight(0xd7dec5, 0x414c31, .4); group.add(light);
+  const key = new THREE.DirectionalLight(0xffedc7, .85); key.position.set(-7, 18, 10); key.target.position.set(0, 0, 0); group.add(key, key.target);
+  const fill = new THREE.DirectionalLight(0xabc8b8, .2); fill.position.set(9, 6, -10); group.add(fill);
 
   function mesh(geometry, material, parent = group, position, scale) {
     const object = new THREE.Mesh(geometry, material); if (position) object.position.set(...position); if (scale) object.scale.set(...scale); parent.add(object); return object;
@@ -63,17 +66,39 @@ export function createGameScene(world, engine, callbacks = {}) {
     object.rotation.x = -Math.PI / 2; object.position.y = .065; return object;
   }
 
+  // Bake static sculptures by material. Geometry retains normals and grain,
+  // while hundreds of branches and stones submit just a few draw calls.
+  function batchOpaque(root, excluded = new Set()) {
+    root.updateMatrixWorld(true); const inverse = root.matrixWorld.clone().invert(), batches = new Map();
+    root.traverse(object => {
+      if (!object.isMesh || object.isInstancedMesh || !object.material?.isMeshStandardMaterial || object.material.transparent) return;
+      for (let parent = object; parent && parent !== root; parent = parent.parent) if (excluded.has(parent)) return;
+      if (!batches.has(object.material)) batches.set(object.material, []); batches.get(object.material).push(object);
+    });
+    for (const [material, objects] of batches) {
+      if (objects.length < 2) continue; const positions = [], normals = [];
+      for (const object of objects) {
+        const geometry = object.geometry.index ? object.geometry.toNonIndexed() : object.geometry.clone();
+        geometry.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, object.matrixWorld));
+        const p = geometry.attributes.position, n = geometry.attributes.normal;
+        for (let i = 0; i < p.count; i++) { positions.push(p.getX(i), p.getY(i), p.getZ(i)); normals.push(n.getX(i), n.getY(i), n.getZ(i)); }
+        geometry.dispose(); object.parent.remove(object);
+      }
+      const geometry = geom(new THREE.BufferGeometry()); geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3)); mesh(geometry, material, root);
+    }
+  }
+
   // Rounded, irregular forest floor, surrounded by the exact authored moss.
   const outline = new THREE.Shape();
   outline.moveTo(-8.3, -7.2); outline.lineTo(8.3, -7.2); outline.quadraticCurveTo(9.7, -7.2, 9.7, -5.8); outline.lineTo(9.7, 5.8); outline.quadraticCurveTo(9.7, 7.2, 8.3, 7.2); outline.lineTo(-8.3, 7.2); outline.quadraticCurveTo(-9.7, 7.2, -9.7, 5.8); outline.lineTo(-9.7, -5.8); outline.quadraticCurveTo(-9.7, -7.2, -8.3, -7.2);
   const earth = mesh(geom(new THREE.ExtrudeGeometry(outline, { depth: .8, bevelEnabled: true, bevelThickness: .35, bevelSize: .32, bevelSegments: 3, steps: 1 })), darkWood);
-  earth.rotation.x = -Math.PI / 2; earth.position.y = -1.05;
-  const groundMaterial = mat('#69754b', { vertexColors: true }); grainMaterial(groundMaterial, .25, 130);
+  earth.rotation.x = -Math.PI / 2; earth.position.y = -1.39;
+  const groundMaterial = mat('#ffffff', { vertexColors: true }); grainMaterial(groundMaterial, .25, 130);
   const groundGeo = geom(new THREE.PlaneGeometry(19.35, 14.35, 100, 76)); groundGeo.rotateX(-Math.PI / 2);
   const groundPositions = groundGeo.attributes.position, groundColors = [], c = new THREE.Color();
   for (let i = 0; i < groundPositions.count; i++) {
     const x = groundPositions.getX(i), z = groundPositions.getZ(i), n = noise(x, z);
-    groundPositions.setY(i, -.11 + n * .07); c.set('#7d8b52').lerp(new THREE.Color('#344531'), Math.min(1, Math.max(0, .38 + n * .32)));
+    groundPositions.setY(i, -.11 + n * .07); c.set('#697346').lerp(new THREE.Color('#344531'), Math.min(1, Math.max(0, .38 + n * .32))).convertSRGBToLinear();
     groundColors.push(c.r, c.g, c.b);
   }
   groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(groundColors, 3)); groundGeo.computeVertexNormals(); mesh(groundGeo, groundMaterial);
@@ -86,7 +111,7 @@ export function createGameScene(world, engine, callbacks = {}) {
     for (let i = 0; i <= count; i++) {
       const p = pathCurve.getPoint(i / count), tangent = pathCurve.getTangent(i / count), side = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
       const rough = 1 + .045 * Math.sin(i * 2.3) + .05 * Math.sin(i * .51);
-      for (const s of [-1, 1]) { const q = p.clone().addScaledVector(side, width * s * rough); positions.push(q.x, y, q.z); c.set(color).multiplyScalar(.88 + rand() * .2); colors.push(c.r, c.g, c.b); }
+      for (const s of [-1, 1]) { const q = p.clone().addScaledVector(side, width * s * rough); positions.push(q.x, y, q.z); c.set(color).convertSRGBToLinear().multiplyScalar(.88 + rand() * .2); colors.push(c.r, c.g, c.b); }
       if (i < count) { const a = i * 2; indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
     }
     const geometry = geom(new THREE.BufferGeometry()); geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3)); geometry.setIndex(indices); geometry.computeVertexNormals();
@@ -102,7 +127,7 @@ export function createGameScene(world, engine, callbacks = {}) {
   // blossom instancing. Sharing this material system is the continuity anchor.
   if (world.assembleRoot && world.buildFarRoot) {
     const ridge = world.assembleRoot(world.buildFarRoot(), { aspect: 2.05, haze: .11, fog: .02, alpha: 1, order: 0, blades: 26000, ferns: 22, flowers: 120, fernSize: [.19, .4], flowerSize: [.04, .09], mouse: { value: new THREE.Vector3(9999, 9999, 9999) }, mouseR: 1.1 });
-    const placements = [[0, -.15, -6.8, 0, 1.8, .8], [-1.2, -.5, 7.2, Math.PI, 1.9, .65], [-9.15, -.55, 0, Math.PI / 2, 1.45, .85], [9.45, -.6, -.3, -Math.PI / 2, 1.4, .65]];
+    const placements = [[0, -.15, -6.8, 0, 1.8, .8], [-1.2, .08, 7.35, Math.PI, 1.9, 1.05], [-9.15, -.55, 0, Math.PI / 2, 1.45, .85], [9.45, -.6, -.3, -Math.PI / 2, 1.4, .65]];
     for (const [x, y, z, rotation, sx, sy] of placements) { const root = ridge.clone(); root.position.set(x, y, z); root.rotation.y = rotation; root.scale.set(sx, sy, .7); group.add(root); }
     ridge.traverse(object => { if (object.geometry) ownedGeometries.add(object.geometry); if (object.material) ownedMaterials.add(object.material); });
   }
@@ -131,8 +156,9 @@ export function createGameScene(world, engine, callbacks = {}) {
   }
   function fern(parent, x, z, size = .6) {
     const cluster = new THREE.Group(); cluster.position.set(x, -.03, z); parent.add(cluster);
-    const count = 8;
-    for (let j = 0; j < count; j++) { const a = j / count * Math.PI * 2, frond = new THREE.Group(); frond.rotation.y = a; cluster.add(frond); for (let k = 0; k < 7; k++) { const t = k / 7, w = (1 - t) * .13 * size; for (const sign of [-1, 1]) { const l = mesh(leafGeo, j % 3 === 0 ? paleLeaf : leaf, frond, [sign * w * .68, Math.sin(t * 1.8) * .55 * size, t * .7 * size], [w, .014 * size, .065 * size]); l.rotation.y = sign * -.5; l.rotation.x = -.25; } } }
+    const count = 8, fronds = new THREE.InstancedMesh(leafGeo, leaf, count * 14), rotation = new THREE.Matrix4(); let index = 0;
+    for (let j = 0; j < count; j++) { const a = j / count * Math.PI * 2; rotation.makeRotationY(a); for (let k = 0; k < 7; k++) { const t = k / 7, w = (1 - t) * .13 * size; for (const sign of [-1, 1]) { matrix.position.set(sign * w * .68, Math.sin(t * 1.8) * .55 * size, t * .7 * size); matrix.scale.set(w, .014 * size, .065 * size); matrix.rotation.set(-.25, sign * -.5, 0); matrix.updateMatrix(); fronds.setMatrixAt(index++, matrix.matrix.clone().premultiply(rotation)); } } }
+    cluster.add(fronds);
     swaying.push({ object: cluster, strength: .02, phase: rand(0, 6) }); return cluster;
   }
   // Sculpted stones, ferns and cream-coloured wildflowers, never uniform trees.
@@ -162,9 +188,10 @@ export function createGameScene(world, engine, callbacks = {}) {
   // Tall sentinel trunks and fern banks surround the clearing, with gaps at
   // entrance and heart so the entire route stays legible.
   for (let i = 0; i < 8; i++) {
-    const x = -9.7 + i * 2.7, z = -7.8 - rand(0, .6), height = rand(3.2, 5.2), sentinel = new THREE.Group(); sentinel.position.set(x, -.4, z); group.add(sentinel);
+    const x = -9.7 + i * 2.7 + rand(-.4,.4), z = -7.8 - rand(0, .6), height = rand(3.2, 5.2), sentinel = new THREE.Group(); sentinel.position.set(x, -.4, z); group.add(sentinel);
     branch(sentinel, [[0, -.6, 0], [.16, height * .34, .05], [-.1, height * .76, 0], [.04, height, .08]], rand(.12, .22), darkWood, 18);
     for (let j = 0; j < 3; j++) { const direction = j % 2 ? -1 : 1, y = height * (.46 + j * .13); branch(sentinel, [[0, y, 0], [direction * .55, y + .34, .1], [direction * .93, y + .61, .15]], .045, wood, 10, 5); foliage(sentinel, [direction * .65, y + .6, .13], .64, 55, leaf); }
+    foliage(sentinel,[.04,height-.08,.08],.83,95,i%2?leaf:paleLeaf);
     contact(sentinel, 2.2, .4); swaying.push({ object: sentinel, strength: .007, phase: i });
   }
 
@@ -175,9 +202,36 @@ export function createGameScene(world, engine, callbacks = {}) {
   const groundMist = [];
   for (let i = 0; i < 6; i++) { const sprite = glow(group, '#c0c8a1', rand(5, 8), [rand(-9, 9), -.38, rand(-6, 6)], .045); sprite.material.blending = THREE.NormalBlending; groundMist.push(sprite); }
   const entrance = new THREE.Group(); entrance.position.set(-8.6, .06, -1); group.add(entrance); const entranceRing = ring(entrance, .52, '#d4d9ad', .35, .015); glow(entrance, '#c9d19e', 1.6, [0, .3, 0], .13);
+  // Moss has reclaimed a small medieval gate at the trail's threshold.
+  const gate = new THREE.Group(); gate.position.set(-8.55,0,-1); group.add(gate);
+  const blockGeometry=geom(new THREE.BoxGeometry(.38,.27,.43));
+  for(const sign of [-1,1]){
+    for(let level=0;level<5;level++){const block=mesh(blockGeometry,cutStone,gate,[0,.14+level*.265,sign*.72],[1+(level%2)*.08,1,1]);block.rotation.y=(level%2)*.05;}
+    orb(gate,[0,1.42,sign*.72],[.29,.1,.29],moss);
+    taperedBranch(gate,[.24,.35,sign*.72],[.24,.9,sign*.72],.025,.022,iron);
+    glow(gate,'#ebc98a',.5,[.24,.97,sign*.72],.2);orb(gate,[.24,.97,sign*.72],[.046,.09,.046],gold);
+  }
+  for(let k=0;k<9;k++){const a=k/8*Math.PI,stone=mesh(blockGeometry,cutStone,gate,[0,1.33+Math.sin(a)*.6,Math.cos(a)*.7],[1,.98,.9]);stone.rotation.x=a-Math.PI/2;}
+  orb(gate,[0,1.96,0],[.22,.09,.28],moss);
+  for(let k=0;k<6;k++){const a=k*6.28/6; if(Math.cos(a)<-.3)continue;const stone=mesh(blockGeometry,cutStone,heart,[Math.cos(a)*1.18,.2,Math.sin(a)*1.12],[.7,1.6,.7]);stone.rotation.y=-a;}
+  batchOpaque(group, new Set([heart])); batchOpaque(heartTrunk);
+
+  const sharedGeometries = new Set(ownedGeometries), sharedMaterials = new Set(ownedMaterials);
+  function releaseObject(object) {
+    if (!object) return;
+    if (object.userData.trail) releaseObject(object.userData.trail);
+    object.parent?.remove(object); const geometries = new Set(), materials = new Set();
+    object.traverse(child => { if (child.geometry && !sharedGeometries.has(child.geometry)) geometries.add(child.geometry); if (child.material && !sharedMaterials.has(child.material)) materials.add(child.material); });
+    for (const geometry of geometries) { geometry.dispose(); ownedGeometries.delete(geometry); }
+    for (const material of materials) { material.dispose(); ownedMaterials.delete(material); }
+  }
 
   function makeTower(type, preview = false) {
     const object = new THREE.Group(), body = new THREE.Group(); object.add(body); object.userData.body = body; contact(object, 1.65, .65);
+    // Weathered stone plinths ground the living guardians in the old grove.
+    mesh(geom(new THREE.CylinderGeometry(.39,.48,.22,8)),cutStone,body,[0,.10,0]);
+    mesh(geom(new THREE.CylinderGeometry(.35,.38,.16,8)),cutStone,body,[0,.285,0]);
+    for(let k=0;k<4;k++){const a=k*Math.PI/2;const stone=mesh(geom(new THREE.BoxGeometry(.13,.16,.16)),cutStone,body,[Math.cos(a)*.30,.39,Math.sin(a)*.30]);stone.rotation.y=-a;}
     const tint = type === 'cannon' ? gold : type === 'frost' ? frost : type === 'lightning' ? violet : paleLeaf;
     for (let i = 0; i < 5; i++) { const a = i / 5 * 6.28; branch(body, [[Math.cos(a) * .52, .01, Math.sin(a) * .5], [Math.cos(a) * .25, .12, Math.sin(a) * .25], [0, .52, 0]], .046, wood, 8, 5); }
     const crown = new THREE.Group(); body.add(crown); object.userData.crown = crown;
@@ -205,12 +259,13 @@ export function createGameScene(world, engine, callbacks = {}) {
       for (let i = 0; i < 5; i++) { const a = i * 6.28 / 5; branch(body, [[0, .66, 0], [Math.cos(a) * .38, 1.15, Math.sin(a) * .38], [Math.cos(a) * .47, 1.52, Math.sin(a) * .47]], .032, paleLeaf, 12, 5); }
       const orbit = mesh(geom(new THREE.TorusGeometry(.33, .009, 4, 48)), violet, crown, [0, .25, 0]); orbit.rotation.x = Math.PI / 2; object.userData.orbit = orbit; glow(crown, '#dcc3ff', 1.35, [0, .27, 0], .2);
     }
+    batchOpaque(body, new Set([crown])); batchOpaque(crown, new Set([object.userData.crystal, object.userData.orbit].filter(Boolean)));
     if (preview) object.traverse(child => { if (child.isMesh && child.material) { const m = child.material.clone(); m.transparent = true; m.opacity = .45; m.depthWrite = false; ownedMaterials.add(m); child.material = m; } });
     return object;
   }
 
   function makeEnemy(enemy) {
-    const object = new THREE.Group(), body = new THREE.Group(); object.add(body); object.userData.body = body;
+    const object = new THREE.Group(), body = new THREE.Group(); object.add(body); object.userData.body = body; object.userData.type = enemy.type;
     const definition = ENEMY_TYPES[enemy.type], size = definition.size, armor = mat(definition.color, { roughness: .77 }), shellMaterial = mat(enemy.type === 'resistant' ? '#73777d' : enemy.type === 'boss' ? '#514737' : '#687052', { roughness: .88 }); grainMaterial(shellMaterial, .22, 50);
     const legs = [], n = enemy.type === 'runner' ? 4 : 3;
     for (let i = 0; i < n; i++) for (const sign of [-1, 1]) { const leg = new THREE.Group(); leg.position.set(sign * size * .45, .12, (i - (n - 1) / 2) * size * .7); body.add(leg); branch(leg, [[0, size * .2, 0], [sign * size * .8, size * .42, .08], [sign * size * 1.05, -.09, .12]], size * .09, darkWood, 5, 4); legs.push({ object: leg, phase: i * 1.8 + (sign < 0 ? 2 : 0), base: leg.rotation.z }); }
@@ -236,7 +291,7 @@ export function createGameScene(world, engine, callbacks = {}) {
   const selectionRing = ring(group, .54, '#e4eac9', .65, .017); selectionRing.visible = false;
   function setBuildType(type) {
     if (buildType === type) return; buildType = type && TOWER_TYPES[type] ? type : null;
-    if (preview) { group.remove(preview); preview = null; }
+    if (preview) { releaseObject(preview); preview = null; }
     if (buildType) { preview = makeTower(buildType, true); group.add(preview); preview.visible = false; }
     plots.visible = active && !!buildType; if (!buildType) hoverRing.visible = false;
   }
@@ -263,7 +318,7 @@ export function createGameScene(world, engine, callbacks = {}) {
   function consumeEffects() {
     for (const event of engine.drainEffects()) {
       callbacks.effect?.(event);
-      if (event.type === 'placement' || event.type === 'upgrade') { spawnBurst(event.x, .2, event.z, TOWER_TYPES[event.type === 'placement' ? event.type : event.type]?.color || '#cfdbad', 28, 1.2, .95); pulse(event.x, event.z, '#dce6b8', 1.15, .85); }
+      if (event.type === 'placement' || event.type === 'upgrade') { spawnBurst(event.x, .2, event.z, TOWER_TYPES[event.entityType || event.towerType]?.color || '#cfdbad', 28, 1.2, .95); pulse(event.x, event.z, '#dce6b8', 1.15, .85); }
       if (event.type === 'impact') { const color = TOWER_TYPES[event.projectileType]?.color || '#dde5bb'; spawnBurst(event.x, .35, event.z, color, event.projectileType === 'cannon' ? 35 : 9, event.projectileType === 'cannon' ? 2.4 : .7, .55); if (event.projectileType !== 'archer') pulse(event.x, event.z, color, event.radius); }
       if (event.type === 'lightning') lightning(event.points);
       if (event.type === 'death') { spawnBurst(event.x, .25, event.z, '#d1c395', 15, 1, .85); }
@@ -281,7 +336,7 @@ export function createGameScene(world, engine, callbacks = {}) {
   }
   function pointerMove(event) {
     if (!active) return;
-    if (drag) { const dx = event.clientX - drag.x, dy = event.clientY - drag.y; dragDistance += Math.abs(dx) + Math.abs(dy); if (drag.pan) { const forward = cameraTarget.clone().sub(cameraPosition); forward.y = 0; forward.normalize(); const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)); const shift = right.multiplyScalar(-dx * 1.5).addScaledVector(forward, dy * 1.5); cameraPosition.add(shift); cameraTarget.add(shift); } drag.x = event.clientX; drag.y = event.clientY; }
+    if (drag) { const dx = event.clientX - drag.x, dy = event.clientY - drag.y; dragDistance += Math.abs(dx) + Math.abs(dy); if (!buildType && dragDistance > 7) drag.pan = true; if (drag.pan) { const forward = cameraTarget.clone().sub(cameraPosition); forward.y = 0; forward.normalize(); const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)); const shift = right.multiplyScalar(-dx * 1.5).addScaledVector(forward, dy * 1.5); cameraPosition.add(shift); cameraTarget.add(shift); } drag.x = event.clientX; drag.y = event.clientY; }
     hover = ignorePointer(event) ? null : locate(event); syncBuildPreview(); callbacks.onHoverCell?.(hover);
   }
   function pointerDown(event) { if (!active || ignorePointer(event)) return; drag = { x: event.clientX, y: event.clientY, pan: event.button === 1 || event.button === 2 || event.shiftKey }; dragDistance = 0; }
@@ -291,7 +346,7 @@ export function createGameScene(world, engine, callbacks = {}) {
     if (tower) callbacks.onSelectTower?.(tower.id); else callbacks.onCell?.(cell.col, cell.row);
   }
   function wheel(event) { if (!active || ignorePointer(event)) return; event.preventDefault(); zoom(event.deltaY); }
-  function zoom(delta) { const offset = cameraPosition.clone().sub(cameraTarget), next = Math.max(1200, Math.min(3100, offset.length() * Math.exp(delta * .00075))); cameraPosition.copy(cameraTarget).add(offset.setLength(next)); }
+  function zoom(delta) { const offset = cameraPosition.clone().sub(cameraTarget), next = Math.max(1200, Math.min(window.innerWidth < 760 ? 6500 : 3100, offset.length() * Math.exp(delta * .00075))); cameraPosition.copy(cameraTarget).add(offset.setLength(next)); }
   function contextMenu(event) { if (active && !ignorePointer(event)) event.preventDefault(); }
   window.addEventListener('pointermove', pointerMove); window.addEventListener('pointerdown', pointerDown); window.addEventListener('pointerup', pointerUp); renderer.domElement.addEventListener('wheel', wheel, { passive: false }); renderer.domElement.addEventListener('contextmenu', contextMenu);
 
@@ -300,10 +355,12 @@ export function createGameScene(world, engine, callbacks = {}) {
     elapsed = typeof time === 'number' ? time : elapsed + dt; windUniform.value = reducedMotion ? 0 : elapsed;
     consumeEffects();
     const towerIds = new Set(engine.towers.map(t => t.id));
-    for (const [id, object] of towerMeshes) if (!towerIds.has(id)) { group.remove(object); towerMeshes.delete(id); }
+    for (const [id, object] of towerMeshes) if (!towerIds.has(id)) { releaseObject(object); towerMeshes.delete(id); }
     for (const tower of engine.towers) {
-      let object = towerMeshes.get(tower.id); if (!object || object.userData.type !== tower.type) { if (object) group.remove(object); object = makeTower(tower.type); object.userData.type = tower.type; object.userData.growth = .01; towerMeshes.set(tower.id, object); group.add(object); }
-      object.position.set(tower.x, .01, tower.z); object.userData.growth += (1 - object.userData.growth) * (1 - Math.exp(-dt * 6));
+      let object = towerMeshes.get(tower.id); if (!object || object.userData.type !== tower.type) { if (object) releaseObject(object); object = makeTower(tower.type); object.userData.type = tower.type; object.userData.growth = .01; object.userData.growthVelocity = 0; towerMeshes.set(tower.id, object); group.add(object); }
+      object.position.set(tower.x, .01, tower.z);
+      const springDt = Math.min(dt, .035), spring = object.userData;
+      spring.growthVelocity += ((1 - spring.growth) * 100 - spring.growthVelocity * 13) * springDt; spring.growth += spring.growthVelocity * springDt;
       const levelSize = 1 + (tower.level - 1) * .1, growth = object.userData.growth, shotAge = engine.time - (tower.firedAt ?? -10);
       object.scale.setScalar(levelSize * growth); object.userData.body.scale.y = 1 - Math.exp(-Math.max(0, shotAge) * 15) * .12;
       const target = engine.enemies.find(e => e.id === tower.targetId); if (target && tower.type !== 'frost') { const targetAngle = Math.atan2(target.x - tower.x, target.z - tower.z); let difference = targetAngle - object.userData.crown.rotation.y; difference = Math.atan2(Math.sin(difference), Math.cos(difference)); object.userData.crown.rotation.y += difference * (1 - Math.exp(-dt * 12)); }
@@ -311,9 +368,9 @@ export function createGameScene(world, engine, callbacks = {}) {
       if (object.userData.orbit) object.userData.orbit.rotation.z = Math.sin(elapsed) * .22;
     }
     const enemyIds = new Set(engine.enemies.map(e => e.id));
-    for (const [id, object] of enemyMeshes) if (!enemyIds.has(id)) { group.remove(object); enemyMeshes.delete(id); }
+    for (const [id, object] of enemyMeshes) if (!enemyIds.has(id)) { releaseObject(object); enemyMeshes.delete(id); }
     for (const enemy of engine.enemies) {
-      let object = enemyMeshes.get(enemy.id); if (!object) { object = makeEnemy(enemy); enemyMeshes.set(enemy.id, object); group.add(object); }
+      let object = enemyMeshes.get(enemy.id); if (!object || object.userData.type !== enemy.type) { if (object) releaseObject(object); object = makeEnemy(enemy); enemyMeshes.set(enemy.id, object); group.add(object); }
       object.position.set(enemy.x, .04, enemy.z); let angle = enemy.angle - object.userData.body.rotation.y; angle = Math.atan2(Math.sin(angle), Math.cos(angle)); object.userData.body.rotation.y += angle * (1 - Math.exp(-dt * 13));
       const walking = engine.time * enemy.speed * 11 + enemy.seed * 7; object.userData.body.position.y = Math.sin(walking * 2) * .018; object.userData.body.rotation.z = Math.sin(walking) * .035;
       object.userData.legs.forEach(leg => { leg.object.rotation.y = Math.sin(walking + leg.phase) * .34; leg.object.rotation.z = Math.cos(walking + leg.phase) * .15; });
@@ -322,7 +379,7 @@ export function createGameScene(world, engine, callbacks = {}) {
       if (object.userData.shield) object.userData.shield.rotation.y = elapsed * .3;
     }
     const projectiles = engine.projectiles.toArray(), projectileIds = new Set(projectiles.map(p => p.id));
-    for (const [id, object] of projectileMeshes) if (!projectileIds.has(id)) { group.remove(object); projectileMeshes.delete(id); }
+    for (const [id, object] of projectileMeshes) if (!projectileIds.has(id)) { releaseObject(object); projectileMeshes.delete(id); }
     for (const projectile of projectiles) {
       let object = projectileMeshes.get(projectile.id); if (!object) { object = new THREE.Group(); const color = TOWER_TYPES[projectile.type].color; if (projectile.type === 'archer') { const thorn = mesh(geom(new THREE.ConeGeometry(.04, .38, 5)), paleLeaf, object); thorn.rotation.x = Math.PI / 2; } else { orb(object, [0, 0, 0], projectile.type === 'cannon' ? .15 : .085, projectile.type === 'cannon' ? gold : frost); glow(object, color, projectile.type === 'cannon' ? .48 : .58, [0, 0, 0], .35); } const trailPositions = new Float32Array(21), trailGeo = geom(new THREE.BufferGeometry()); trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3)); const trailMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: .42 }); ownedMaterials.add(trailMat); const trail = new THREE.Line(trailGeo, trailMat); group.add(trail); object.userData.trail = trail; object.userData.history = []; projectileMeshes.set(projectile.id, object); group.add(object); }
       object.position.set(projectile.x, projectile.y, projectile.z); if (Math.hypot(projectile.vx, projectile.vy, projectile.vz) > .01) object.lookAt(projectile.x + projectile.vx, projectile.y + projectile.vy, projectile.z + projectile.vz);
@@ -332,7 +389,7 @@ export function createGameScene(world, engine, callbacks = {}) {
     for (let i = group.children.length - 1; i >= 0; i--) { const child = group.children[i]; if (child.isLine && child.userData.projectileTrail && !projectileIds.has(child.userData.projectileTrail)) group.remove(child); }
     for (const [id, object] of projectileMeshes) object.userData.trail.userData.projectileTrail = id;
     for (let i = effects.length - 1; i >= 0; i--) {
-      const effect = effects[i]; effect.age += dt; const t = effect.age / effect.lifetime; if (t >= 1) { group.remove(effect.object); effect.object.geometry?.dispose(); effect.object.material?.dispose(); effects.splice(i, 1); continue; }
+      const effect = effects[i]; effect.age += dt; const t = effect.age / effect.lifetime; if (t >= 1) { releaseObject(effect.object); effects.splice(i, 1); continue; }
       effect.object.material.opacity = (1 - t) * (effect.kind === 'pulse' ? .6 : 1);
       if (effect.kind === 'pulse') effect.object.scale.setScalar(Math.max(.01, effect.radius * (1 - Math.pow(1 - t, 3))));
       if (effect.kind === 'burst') { const positions = effect.object.geometry.attributes.position; for (let k = 0; k < positions.count; k++) { const velocity = effect.velocities[k]; velocity[1] -= dt * 2.8; positions.setXYZ(k, positions.getX(k) + velocity[0] * dt, positions.getY(k) + velocity[1] * dt, positions.getZ(k) + velocity[2] * dt); } positions.needsUpdate = true; }
@@ -348,7 +405,15 @@ export function createGameScene(world, engine, callbacks = {}) {
   }
   function setActive(value) { active = value; group.visible = value; plots.visible = value && !!buildType; if (!value) { hover = null; drag = null; } }
   function resetCamera() { cameraPosition.copy(homePosition); cameraTarget.copy(homeTarget); }
-  function resize() { const narrow = window.innerWidth < 760; homePosition.set(narrow ? 100 : 600, narrow ? 1700 : 1100, narrow ? 1150 : 650); if (!drag) resetCamera(); }
+  function resize() {
+    const narrow = window.innerWidth < 760;
+    homeTarget.set(0, narrow ? -350 : -120, -900);
+    if (narrow) {
+      const distance = Math.max(2850, 1450 / (2 * Math.tan(Math.PI / 9) * (window.innerWidth / window.innerHeight)));
+      homePosition.copy(homeTarget).add(new THREE.Vector3(100, 2350, 2900).setLength(distance));
+    } else homePosition.set(600, 1100, 650);
+    if (!drag) resetCamera();
+  }
   function dispose() { window.removeEventListener('pointermove', pointerMove); window.removeEventListener('pointerdown', pointerDown); window.removeEventListener('pointerup', pointerUp); renderer.domElement.removeEventListener('wheel', wheel); renderer.domElement.removeEventListener('contextmenu', contextMenu); scene.remove(group); ownedGeometries.forEach(g => g.dispose()); ownedMaterials.forEach(m => m.dispose()); ownedTextures.forEach(t => t.dispose()); }
   return { group, cameraPosition, cameraTarget, update, setActive, zoom, resetCamera, resize, dispose, setBuildType };
 }

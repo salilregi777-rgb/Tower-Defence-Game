@@ -16,6 +16,8 @@ Open http://127.0.0.1:5173. If Node is installed in the usual PATH, `npm run dev
 
 Click the circular Play button or Enter in the original dock. Choose a guardian, then click a buildable forest tile beside the winding trail. Start each wave when ready. Survive ten waves; the fifth and tenth include bosses. Select a planted tower to choose its upgrade branch, targeting priority, or sell it.
 
+The animated **Challenge** slider has five levels: Gentle, Guarded, Resolute, Relentless, and Siege. Resolute is the default, with 35% more enemy health than the original balance. Higher settings also raise movement speed and spawn pressure and reduce rewards. Change difficulty between waves; it locks during combat and is included in saves. Spend the seeds earned from defeated enemies and completed waves on new guardians and upgrades. The tested starter-only formation loses by wave 5 on Resolute, while a strategy that reinvests its seeds can survive all ten waves.
+
 - 1–4: choose Archer, Cannon, Frost, or Lightning
 - Space: pause/resume
 - Escape: clear placement/selection

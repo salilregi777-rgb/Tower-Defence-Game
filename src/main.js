@@ -25,7 +25,7 @@ function chooseTower(type){buildType=type;view?.setBuildType(type);ui?.setBuildT
 function notify(result){if(result?.message)ui?.notify(result.message);return result;}
 function ripple(e){const pulse=document.createElement('div');pulse.className='entry-ripple';pulse.style.left=(e?.clientX||innerWidth*.18)+'px';pulse.style.top=(e?.clientY||innerHeight*.6)+'px';document.body.append(pulse);setTimeout(()=>pulse.remove(),1900);world?.burstAt(e?.clientX||innerWidth*.18,e?.clientY||innerHeight*.6);}
 function enter(e){e?.preventDefault();if(!view){showError('The living world is still growing. Try Enter again in a moment.');return;}if(destination===1)return;ripple(e);destination=1;mode='entering';document.body.classList.add('journey','in-world');$('.stage').inert=true;$('.dock-wrap').inert=true;view.group.visible=true;engine.paused=true;}
-function home(){if(destination===0)return;wasPaused=engine.paused;engine.paused=true;destination=0;mode='leaving';ui.setVisible(false);chooseTower(null);view.setActive(false);}
+function home(){if(destination===0)return;wasPaused=engine.paused;engine.paused=true;destination=0;mode='leaving';ui.setVisible(false);chooseTower(null);view.setActive(false);view.group.visible=true;}
 function restart(){engine.restart();wasPaused=false;chooseTower(null);ui.notify('A new grove awaits.');}
 function showError(message){let el=$('.world-error');if(!el){el=document.createElement('div');el.className='world-error';document.body.append(el);}el.textContent=message;setTimeout(()=>el.remove(),6000);}
 function init(){if(world||!window.sylvaWorld)return;world=window.sylvaWorld;
@@ -65,6 +65,7 @@ function frame(dt,time){
  lastUI+=dt;if(lastUI>.10){ui.update(lastUI);lastUI=0;}
 }
 $('.liquid-button--play').addEventListener('click',enter,{signal});$('.dock-item--enter').addEventListener('click',enter,{signal});
+for (const item of document.querySelectorAll('.dock-item')) item.setAttribute('aria-label', item.classList.contains('dock-item--enter') ? 'Enter the grove' : item.textContent.trim());
 $('.liquid-button--explore').addEventListener('click',()=>showHelp(),{signal});
 for(const el of document.querySelectorAll('.knob,.scroll'))el.addEventListener('click',e=>{e.preventDefault();showHelp(el.closest('.card--stove')!==null);},{signal});
 for(const el of document.querySelectorAll('.dock-item:not(.dock-item--enter)'))el.addEventListener('click',e=>{e.preventDefault();const text=el.textContent.trim();if(text==='Habitats')showHelp();if(text==='Journal')showHelp(true);},{signal});
@@ -73,4 +74,4 @@ $('#scene').addEventListener('webglcontextlost',e=>{e.preventDefault();engine.pa
 $('#scene').addEventListener('webglcontextrestored',()=>{ui?.notify('Graphics restored. Resume when ready.');},{signal});
 window.addEventListener('resize',()=>view?.resize?.(),{signal});
 window.addEventListener('sylva-ready',()=>queueMicrotask(init),{signal});if(window.sylvaWorld)init();
-window.addEventListener('pagehide',()=>{engine.save();audio.dispose();ui?.dispose();view?.dispose();window.sylvaFrame=null;abort.abort();},{once:true});
+window.addEventListener('pagehide',event=>{engine.save();if(event.persisted){engine.paused=true;return;}audio.dispose();ui?.dispose();view?.dispose();window.sylvaFrame=null;abort.abort();},{once:true});

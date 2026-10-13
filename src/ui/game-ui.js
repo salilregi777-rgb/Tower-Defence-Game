@@ -1,4 +1,5 @@
 import { TOWER_TYPES } from '../game/engine.js';
+import { DIFFICULTIES } from '../game/config.js';
 
 const ICONS = {
   tree: '<path d="M12 21v-6m-5 1h10M12 3l-5 6h3l-5 6h14l-5-6h3z"/>',
@@ -33,10 +34,10 @@ const SHORT = { archer: 'Swift · precise', cannon: 'Area damage', frost: 'Slows
 const STRUCTURES = {
   queue: { label: 'Queue', title: 'Enemy spawn queue', structure: 'Circular queue', complexity: 'O(1)', copy: 'A circular FIFO queue holds this wave’s remaining invaders. Dequeue removes the head; the indices wrap around the fixed buffer.' },
   list: { label: 'Linked list', title: 'Active projectiles', structure: 'Linked list', complexity: 'O(1) insert · O(n) search', copy: 'Each moving projectile is a linked node. Impacts remove nodes while traversal safely keeps the next pointer.' },
-  heap: { label: 'Max heap', title: 'Target priority', structure: 'Max heap', complexity: 'O(k log k) rebuild', copy: 'Each attack rebuilds priorities from enemies currently in range. The greatest priority is extracted; this is the remaining heap, with its real parent–child relationships.' },
+  heap: { label: 'Max heap', title: 'Target priority', structure: 'Max heap', complexity: 'O(k log k) rebuild', copy: 'Each attack rebuilds priorities from enemies currently in range. This live heap shows all current candidates and their real parent–child relationships. The root has the greatest priority for the selected targeting mode.' },
   bst: { label: 'Enemy BST', title: 'Living enemy index', structure: 'BST', complexity: 'O(h), worst O(n)', copy: 'Unique IDs index live enemy objects. Tracking projectiles search this tree. This is an ordinary unbalanced BST; sequential IDs can form a long branch.' },
   stacks: { label: 'Stacks', title: 'Decision memory', structure: 'Stack', complexity: 'O(1) push / pop', copy: 'Undo and redo store tower snapshots and coin changes. Only your decisions reverse; enemy movement and earned rewards continue independently.' },
-  upgrade: { label: 'Upgrades', title: 'Branches of growth', structure: 'Binary tree', complexity: 'O(h) branch lookup', copy: 'Every growth decision follows one child of the tower’s binary upgrade tree. The chosen node applies real damage, range, or attack-speed changes.' },
+  upgrade: { label: 'Upgrades', title: 'Branches of growth', structure: 'Binary tree', complexity: 'O(U) node lookup', copy: 'Every growth decision follows one child of the tower’s binary upgrade tree. The chosen node applies real damage, range, or attack-speed changes.' },
   btree: { label: 'B-tree', title: 'The grove’s memory', structure: 'B-tree', complexity: 'O(log n) search / insert', copy: 'Completed waves are indexed by record ID in a minimum-degree-2 B-tree. A full node splits, promoting its median key. Records persist on this device.' },
   bfs: { label: 'BFS + grid', title: 'A way through the forest', structure: 'BFS', complexity: 'O(V + E)', copy: 'Breadth-first search explores walkable cells using the circular queue. Predecessors reconstruct the actual route followed by every invader.' },
 };
@@ -75,7 +76,16 @@ export function createGameUI(engine, callbacks = {}) {
     </div>
     <div class="sg-history sg-glass" role="group" aria-label="Decision history"><button class="sg-icon-button" data-action="undo" title="Undo decision (Ctrl / ⌘ Z)" aria-label="Undo decision">${icon('undo')}<small data-value="undo">0</small></button><button class="sg-icon-button" data-action="redo" title="Redo decision (Ctrl / ⌘ Shift Z)" aria-label="Redo decision">${icon('redo')}<small data-value="redo">0</small></button></div>
     <div class="sg-camera sg-glass" role="group" aria-label="Camera"><button class="sg-icon-button" data-action="zoom-out" title="Zoom out" aria-label="Zoom out">${icon('minus')}</button><button class="sg-icon-button" data-action="zoom-in" title="Zoom in" aria-label="Zoom in">${icon('plus')}</button><button class="sg-icon-button" data-action="camera-reset" title="Reset camera" aria-label="Reset camera">${icon('reset')}</button></div>
-    <section class="sg-wave-control sg-glass" aria-label="Wave controls"><div class="sg-wave-heading"><span class="sg-wave-label">The forest is waiting</span><button class="sg-speed" data-action="speed" title="Cycle game speed" aria-label="Game speed">1×</button></div><div class="sg-wave-actions"><button class="sg-button sg-primary sg-wave-start" data-action="wave">${icon('play')}<span>Begin wave 01</span></button><button class="sg-icon-button sg-pause" data-action="pause" title="Pause (Space)" aria-label="Pause game">${icon('pause')}</button></div><div class="sg-progress"><span></span></div></section>
+    <section class="sg-wave-control sg-glass" aria-label="Wave controls">
+      <div class="sg-difficulty">
+        <div class="sg-difficulty-heading"><label for="sg-difficulty">THE CHALLENGE</label><output for="sg-difficulty" class="sg-difficulty-name" aria-live="polite">Resolute</output></div>
+        <div class="sg-difficulty-range"><span class="sg-difficulty-ripple" aria-hidden="true"></span><input id="sg-difficulty" data-action="difficulty" type="range" min="1" max="5" step="1" value="3" aria-label="Game difficulty" aria-describedby="sg-difficulty-stats sg-difficulty-note" /></div>
+        <div class="sg-difficulty-stops" aria-hidden="true">${Object.values(DIFFICULTIES).map(profile => `<span data-difficulty-stop="${profile.value}" title="${escape(profile.description)}">${escape(profile.label)}</span>`).join('')}</div>
+        <div class="sg-difficulty-stats" id="sg-difficulty-stats"></div>
+        <p class="sg-difficulty-note" id="sg-difficulty-note">Tune between waves</p>
+      </div>
+      <div class="sg-wave-heading"><span class="sg-wave-label">The forest is waiting</span><button class="sg-speed" data-action="speed" title="Cycle game speed" aria-label="Game speed">1×</button></div><div class="sg-wave-actions"><button class="sg-button sg-primary sg-wave-start" data-action="wave">${icon('play')}<span>Begin wave 01</span></button><button class="sg-icon-button sg-pause" data-action="pause" title="Pause (Space)" aria-label="Pause game">${icon('pause')}</button></div><div class="sg-progress"><span></span></div>
+    </section>
     <section class="sg-selection sg-glass" aria-label="Selected tower" hidden></section>
     <aside class="sg-inspector sg-glass" aria-label="Live data structure inspector" hidden>
       <div class="sg-panel-top"><span class="sg-eyebrow">THE SYSTEM BENEATH</span><button class="sg-icon-button" data-action="inspector" aria-label="Close inspector">${icon('close')}</button></div><h2>A living architecture.</h2><p class="sg-inspector-intro">The actual structures tending this world.</p>
@@ -90,7 +100,7 @@ export function createGameUI(engine, callbacks = {}) {
   let visible = false, buildType = null, inspectorOpen = false, structure = 'queue', soundOn = false;
   let uiTime = 0, renderClock = 0, inspectorClock = 0, noticeUntil = 0, selectedFingerprint = '', tutorialFingerprint = '';
   let tutorialDismissed = false, modal = null, modalWasPaused = false, previousPhase = engine.phase, previousWave = engine.wave;
-  let operationKey = '', bfsReplay = false, bfsProgress = 0, lastFocus = null, historySearchResult = '', disposed = false;
+  let operationKey = '', bfsReplay = false, bfsProgress = 0, lastFocus = null, historySearchResult = '', disposed = false, difficultyFingerprint = '';
   const field = name => $(`[data-value="${name}"]`);
   function notify(message, seconds = 3) { if (!message) return; $('.sg-notice').textContent = message; $('.sg-notice').classList.add('is-visible'); noticeUntil = uiTime + seconds; }
   function result(action, quiet = false) { const response = action(); if (!quiet && response?.message) notify(response.message); selectedFingerprint = ''; render(); return response; }
@@ -111,7 +121,7 @@ export function createGameUI(engine, callbacks = {}) {
   function renderSelection() {
     const tower = engine.getTower(); const panel = $('.sg-selection'); panel.hidden = !tower; root.classList.toggle('has-selection', Boolean(tower));
     if (!tower) { selectedFingerprint = ''; return; }
-    const fingerprint = `${tower.id}/${tower.upgradeNode}/${tower.mode}/${engine.coins}`; if (fingerprint === selectedFingerprint) return; selectedFingerprint = fingerprint;
+    const fingerprint = `${tower.id}/${tower.upgradeNode}/${tower.mode}/${engine.coins}`; if (fingerprint === selectedFingerprint || document.activeElement === panel.querySelector('select')) return; selectedFingerprint = fingerprint;
     const definition = TOWER_TYPES[tower.type], upgrades = engine.getUpgradeOptions(tower.id);
     panel.innerHTML = `<div class="sg-panel-top"><span class="sg-eyebrow">ROOTED · LEVEL ${tower.level}</span><button class="sg-icon-button" data-action="deselect" aria-label="Close tower details">${icon('close')}</button></div><h2>${NAMES[tower.type]}</h2><p class="sg-description">${escape(definition.description)}</p><div class="sg-stats"><div><strong>${Math.round(tower.stats.damage)}</strong><small>DAMAGE</small></div><div><strong>${(1 / tower.stats.interval).toFixed(1)}<span style="font-size:9px">/s</span></strong><small>ATTACKS</small></div><div><strong>${tower.stats.range.toFixed(1)}</strong><small>RANGE</small></div></div><label class="sg-target-row">Seek the <select data-action="target" aria-label="Tower targeting mode">${['first', 'last', 'strongest', 'weakest'].map(mode => `<option value="${mode}"${tower.mode === mode ? ' selected' : ''}>${mode[0].toUpperCase() + mode.slice(1)}</option>`).join('')}</select></label><div class="sg-upgrade-heading">CHOOSE YOUR GROWTH</div>${tower.upgradeNode !== 'root' ? `<div class="sg-branch-label">${escape(engine.upgradeTrees[tower.type].search(tower.upgradeNode)?.name || tower.upgradeNode)} branch</div>` : ''}${upgrades.length ? upgrades.map(upgrade => `<button class="sg-upgrade" data-upgrade="${escape(upgrade.id)}"${engine.coins < upgrade.cost ? ' disabled' : ''}><span>${escape(upgrade.name)}<em>${upgrade.cost} seeds</em></span><small>${escape(upgrade.description)}</small></button>`).join('') : '<div class="sg-max-upgrade">Fully grown. The grove is stronger.</div>'}<button class="sg-sell" data-action="sell">Return to the earth · +${Math.floor(tower.invested * .7)} seeds</button>`;
   }
@@ -127,7 +137,7 @@ export function createGameUI(engine, callbacks = {}) {
   function drawStructure(snapshot) {
     if (structure === 'queue') return `<div class="sg-data-note" style="margin:0 0 10px">HEAD ${snapshot.queueMeta.head} · TAIL ${snapshot.queueMeta.tail} · ${snapshot.queue.length} / ${snapshot.queueMeta.capacity} slots</div><div class="sg-nodes">${snapshot.queue.length ? snapshot.queue.slice(0, 28).map((entry, index) => `${index ? '<span class="sg-node-arrow">→</span>' : ''}${node(entry.type, `#${entry.ordinal} · ${entry.delay.toFixed(1)}s`, index === 0)}`).join('') : empty('The queue is empty.<br>Begin a wave to enqueue its invaders.')}</div>${snapshot.queue.length > 28 ? `<div class="sg-data-note">+ ${snapshot.queue.length - 28} entries in the buffer</div>` : ''}`;
     if (structure === 'list') return `<div class="sg-data-note" style="margin:0 0 10px">HEAD → ${snapshot.linkedList.length} ACTIVE NODES → NULL</div><div class="sg-nodes">${snapshot.linkedList.length ? snapshot.linkedList.slice(0, 25).map((entry, index) => `${index ? '<span class="sg-node-arrow">→</span>' : ''}${node(`#${entry.id}`, `${entry.type} → #${entry.targetId}`)}`).join('') + '<span class="sg-node-arrow">→ ∅</span>' : empty('No projectiles in flight.<br>Watch these nodes appear as towers fire.')}</div>`;
-    if (structure === 'heap') return `<div class="sg-data-note" style="margin:0 0 10px">TOWER ${snapshot.heapTowerId ? '#' + snapshot.heapTowerId : '—'} · EXTRACTED TARGET ${snapshot.heapTargetId ? '#' + snapshot.heapTargetId : '—'}</div>${snapshot.heap.length ? heapHTML(snapshot.heap) : empty('No candidates remain in the latest heap.<br>The highest-priority target is extracted before firing.')}`;
+    if (structure === 'heap') return `<div class="sg-data-note" style="margin:0 0 10px">TOWER ${snapshot.heapTowerId ? '#' + snapshot.heapTowerId : '—'} · ${escape(snapshot.heapMode || 'first').toUpperCase()}<br>NEXT TARGET ${snapshot.heapTargetId ? '#' + snapshot.heapTargetId : '—'} · LAST EXTRACTED ${snapshot.heapLastExtractedId ? '#' + snapshot.heapLastExtractedId : '—'}</div>${snapshot.heap.length ? heapHTML(snapshot.heap) : empty('No living invaders are currently in range.<br>The priority heap fills as enemies approach.')}`;
     if (structure === 'bst') return snapshot.bst ? `${treeHTML(snapshot.bst, 'bst', snapshot.heapTargetId)}<div class="sg-data-note">In-order traversal: ${snapshot.bstOrdered.map(id => '#' + id).join(' → ')}</div>` : empty('No living invaders to index.<br>Spawning inserts a node; death removes it.');
     if (structure === 'stacks') return `<div class="sg-stack-columns">${['undo', 'redo'].map(key => `<div class="sg-stack-column"><small>${key.toUpperCase()} · TOP ↓</small>${snapshot[key].length ? snapshot[key].slice(-12).reverse().map(entry => node(`${entry.kind} #${entry.id}`, `${entry.coinDelta > 0 ? '+' : ''}${entry.coinDelta} seeds`)).join('') : empty('∅ empty')}</div>`).join('')}</div>`;
     if (structure === 'upgrade') return snapshot.upgradeTree ? treeHTML(snapshot.upgradeTree, 'upgrade', snapshot.upgradeNode) : empty('Select a planted tower to inspect<br>its real upgrade tree.');
@@ -144,7 +154,7 @@ export function createGameUI(engine, callbacks = {}) {
     const snapshot = engine.inspector(), data = STRUCTURES[structure], body = $('.sg-structure-body');
     const events = snapshot.operations.filter(op => op.structure === data.structure);
     const event = operationKey ? events.find(op => `${op.time}/${op.operation}` === operationKey) : events.at(-1);
-    const meta = event || data; const scroll = body.scrollTop; const input = $('#sg-record-id'); const focusedSearch = document.activeElement === input; const searchValue = input?.value || '';
+    const meta = event || data; const scroll = body.scrollTop; const input = $('#sg-record-id'); const focusedSearch = document.activeElement === input || document.activeElement?.matches('.sg-operation-select'); const searchValue = input?.value || '';
     // Keep a field being typed into stable; only the live diagram needs to change.
     if (focusedSearch) { const view = $('.sg-structure-view'); if (view) view.innerHTML = drawStructure(snapshot); return; }
     body.innerHTML = `<div class="sg-structure-meta"><span>${data.title}</span></div><p class="sg-algorithm-copy">${data.copy}</p><div class="sg-structure-view">${drawStructure(snapshot)}</div>${structure === 'bfs' ? `<button class="sg-button sg-bfs-play" data-action="bfs-replay">${icon('play')}${bfsReplay && bfsProgress < snapshot.bfs.order.length ? 'Exploring the recorded frontier…' : 'Replay BFS exploration'}</button>` : ''}${structure === 'btree' ? `<div class="sg-history-search"><input id="sg-record-id" type="number" min="1" placeholder="Record ID" aria-label="Wave record ID" value="${escape(searchValue)}"><button class="sg-button" data-action="history-search">Search</button></div><div class="sg-history-result">${escape(historySearchResult)}</div>` : ''}<div class="sg-data-note" style="margin-top:18px;margin-bottom:6px">INSPECT AN ACTUAL OPERATION</div><select class="sg-operation-select" aria-label="Select recorded data structure operation"><option value="">Latest ${events.length ? 'operation' : '— awaiting activity'}</option>${events.slice(-12).reverse().map(op => `<option value="${escape(op.time + '/' + op.operation)}"${operationKey === op.time + '/' + op.operation ? ' selected' : ''}>${op.time.toFixed(1)}s · ${escape(op.operation)}</option>`).join('')}</select><div class="sg-complexity">${escape(meta.complexity)}</div><p class="sg-algorithm-copy" style="margin-top:7px">${escape(event?.explanation || 'Perform an action to record its operation here.')}</p>${event?.nodes?.length ? `<div class="sg-data-note">Affected nodes: ${event.nodes.slice(0, 15).map(escape).join(' · ')}${event.nodes.length > 15 ? ' …' : ''}</div>` : ''}`;
@@ -172,12 +182,30 @@ export function createGameUI(engine, callbacks = {}) {
     $('.sg-wave-start span').textContent = running ? `Wave ${String(engine.wave).padStart(2, '0')} alive` : `Begin wave ${String(engine.wave).padStart(2, '0')}`; $('.sg-wave-start').disabled = engine.phase !== 'ready';
     $('.sg-pause').innerHTML = icon(engine.paused ? 'play' : 'pause'); $('.sg-pause').setAttribute('aria-label', engine.paused ? 'Resume game' : 'Pause game');
     $('.sg-progress span').style.width = `${running ? 100 * (1 - (engine.enemies.length + engine.spawnQueue.size) / Math.max(1, engine.waveTotal)) : 0}%`;
+    renderDifficulty();
     $$('.sg-tower-button').forEach(button => { button.disabled = engine.coins < TOWER_TYPES[button.dataset.tower].cost || ['victory', 'defeat'].includes(engine.phase); });
     renderTutorial(); renderSelection();
     if (engine.wave !== previousWave && engine.phase === 'ready') notify(`Wave ${previousWave} survived. New seeds are ready to grow.`, 5);
     previousWave = engine.wave;
     if (['victory', 'defeat'].includes(engine.phase) && engine.phase !== previousPhase) openModal(engine.phase);
     previousPhase = engine.phase;
+  }
+  function renderDifficulty() {
+    const profile = DIFFICULTIES[engine.difficulty], locked = engine.phase !== 'ready';
+    const fingerprint = `${engine.difficulty}/${locked}`;
+    if (fingerprint === difficultyFingerprint) return;
+    difficultyFingerprint = fingerprint;
+    const control = $('#sg-difficulty'), panel = $('.sg-difficulty');
+    control.value = profile.value; control.disabled = locked;
+    control.setAttribute('aria-valuetext', `${profile.value} of 5: ${profile.label}`);
+    panel.style.setProperty('--difficulty-progress', `${(profile.value - 1) * 25}%`);
+    panel.classList.toggle('is-locked', locked);
+    $('.sg-difficulty-name').textContent = profile.label;
+    $$('.sg-difficulty-stops span').forEach(stop => stop.classList.toggle('is-current', Number(stop.dataset.difficultyStop) === profile.value));
+    const factor = value => `${Number(value.toFixed(2))}×`;
+    $('.sg-difficulty-stats').innerHTML = `<span>Health <b>${factor(profile.hp)}</b></span><span>Speed <b>${factor(profile.speed)}</b></span><span>Spawn pace <b>${factor(1 / profile.spawn)}</b></span><span>Seeds <b>${factor(profile.reward)}</b></span>`;
+    $('.sg-difficulty-stats').title = `${profile.description} Enemy count: ${factor(profile.count)}.`;
+    $('.sg-difficulty-note').textContent = locked ? 'Locked until the wave ends' : 'Tune between waves · invest to endure';
   }
   function action(name) {
     if (name === 'home') { closeModal(true); callbacks.home?.(); }
@@ -195,7 +223,7 @@ export function createGameUI(engine, callbacks = {}) {
     else if (name === 'close-modal') closeModal();
     else if (name === 'dismiss-tutorial') { tutorialDismissed = true; renderTutorial(); }
     else if (name === 'save') result(() => engine.save());
-    else if (name === 'load') { const response = result(() => engine.load()); if (response?.ok) { closeModal(false); callbacks.onLoad?.(); setBuildType(null); callbacks.chooseTower?.(null); previousPhase = ''; } }
+    else if (name === 'load') { const response = result(() => { const restored = engine.load(); if (restored.ok) previousWave = engine.wave; return restored; }); if (response?.ok) { closeModal(false); callbacks.onLoad?.(); setBuildType(null); callbacks.chooseTower?.(null); previousPhase = ''; } }
     else if (name === 'restart') { closeModal(false); result(() => engine.restart()); setBuildType(null); callbacks.chooseTower?.(null); callbacks.onRestart?.(); tutorialDismissed = false; tutorialFingerprint = ''; previousPhase = 'ready'; previousWave = 1; }
     else if (name === 'sound') {
       const applySoundState = value => { soundOn = typeof value === 'boolean' ? value : soundOn; const button = $('.sg-sound-tool'); button.innerHTML = icon(soundOn ? 'sound' : 'mute'); button.setAttribute('aria-label', soundOn ? 'Mute sound' : 'Enable sound'); button.title = soundOn ? 'Sound on' : 'Sound off'; if (modal === 'menu') openModal('menu', true); notify(soundOn ? 'The sounds of the grove are on.' : 'A quieter grove.'); };
@@ -215,7 +243,22 @@ export function createGameUI(engine, callbacks = {}) {
     else if (button.dataset.structure) { structure = button.dataset.structure; operationKey = ''; $$('.sg-inspector-tabs button').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.structure === structure))); $('.sg-structure-body').scrollTop = 0; renderInspector(); }
     else if (button.dataset.action) action(button.dataset.action);
   };
-  const onChange = event => { if (event.target.dataset.action === 'target') result(() => engine.setTargetMode(engine.selectedTowerId, event.target.value)); else if (event.target.matches('.sg-operation-select')) { operationKey = event.target.value; renderInspector(); } };
+  function changeDifficulty(event) {
+    if (event.target.dataset.action !== 'difficulty') return;
+    const value = Number(event.target.value);
+    if (value === engine.difficulty) return;
+    const response = engine.setDifficulty(value);
+    if (!response.ok) notify(response.message);
+    difficultyFingerprint = ''; renderDifficulty();
+  }
+  const onChange = event => { if (event.target.dataset.action === 'difficulty') changeDifficulty(event); else if (event.target.dataset.action === 'target') result(() => engine.setTargetMode(engine.selectedTowerId, event.target.value)); else if (event.target.matches('.sg-operation-select')) { operationKey = event.target.value; event.target.blur(); renderInspector(); } };
+  const onPointerDown = event => {
+    if (event.target.id !== 'sg-difficulty' || event.target.disabled || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const bounds = event.target.getBoundingClientRect(), ripple = $('.sg-difficulty-ripple');
+    ripple.style.left = `${Math.max(12, Math.min(bounds.width - 12, event.clientX - bounds.left)) + 4}px`;
+    ripple.getAnimations().forEach(animation => animation.cancel());
+    ripple.animate([{ opacity: .6, transform: 'translate(-50%, -50%) scale(.6)' }, { opacity: 0, transform: 'translate(-50%, -50%) scale(2.2)' }], { duration: 650, easing: 'cubic-bezier(.16,1,.3,1)' });
+  };
   const onKey = event => {
     if (!visible || event.ctrlKey && event.key === 'r' || event.metaKey && event.key === 'r') return;
     if (modal && event.key === 'Tab') { const buttons = [...$('.sg-overlay').querySelectorAll('button:not(:disabled),input,select')]; if (!buttons.length) return; const first = buttons[0], last = buttons.at(-1); if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } return; }
@@ -230,13 +273,13 @@ export function createGameUI(engine, callbacks = {}) {
     else if (event.code === 'Space') { event.preventDefault(); action('pause'); }
     else if (key === 'i') action('inspector'); else if (key === 'h') action('help'); else if (key === 'n') action('wave'); else if (key === 'r') action('camera-reset');
   };
-  root.addEventListener('click', onClick); root.addEventListener('change', onChange); document.addEventListener('keydown', onKey);
+  root.addEventListener('click', onClick); root.addEventListener('change', onChange); root.addEventListener('input', changeDifficulty); root.addEventListener('pointerdown', onPointerDown); document.addEventListener('keydown', onKey);
   render();
   return {
     root, notify, setBuildType,
     setVisible(value) { visible = Boolean(value); root.classList.toggle('is-visible', visible); root.setAttribute('aria-hidden', String(!visible)); root.inert = !visible; if (!visible) closeModal(true); else { render(); if (['victory', 'defeat'].includes(engine.phase)) openModal(engine.phase); } },
     update(dt = 0) { if (disposed) return; uiTime += dt; if (!visible) return; renderClock += dt; inspectorClock += dt; if (noticeUntil && uiTime >= noticeUntil) { $('.sg-notice').classList.remove('is-visible'); noticeUntil = 0; } if (bfsReplay) bfsProgress += dt * 12; if (renderClock > .12) { renderClock = 0; render(); } if (inspectorClock > .22) { inspectorClock = 0; renderInspector(); } },
     showHelp() { openModal('help'); },
-    dispose() { disposed = true; document.removeEventListener('keydown', onKey); root.removeEventListener('click', onClick); root.removeEventListener('change', onChange); root.remove(); link.remove(); },
+    dispose() { disposed = true; document.removeEventListener('keydown', onKey); root.removeEventListener('click', onClick); root.removeEventListener('change', onChange); root.removeEventListener('input', changeDifficulty); root.removeEventListener('pointerdown', onPointerDown); root.remove(); link.remove(); },
   };
 }

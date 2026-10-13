@@ -1,7 +1,7 @@
 import { CircularQueue, Stack, LinkedList, MaxHeap, BinarySearchTree, BTree, bfs } from '../dsa/structures.js';
-import { TOWER_TYPES, ENEMY_TYPES, createUpgradeTrees, createBattlefield, generateWave } from './config.js';
+import { DEFAULT_DIFFICULTY, DIFFICULTIES, TOWER_TYPES, ENEMY_TYPES, createUpgradeTrees, createBattlefield, generateWave } from './config.js';
 import { validateSave, validHistoryRecord } from './save-validation.js';
-export { TOWER_TYPES, ENEMY_TYPES } from './config.js';
+export { DIFFICULTIES, DEFAULT_DIFFICULTY, TOWER_TYPES, ENEMY_TYPES } from './config.js';
 
 const STEP = 1 / 60, SAVE_KEY = 'sylva-game-v1', HISTORY_KEY = 'sylva-wave-history-v1';
 const copy = value => JSON.parse(JSON.stringify(value));
@@ -18,19 +18,27 @@ export class GameEngine {
     this.restart();
   }
   restart() {
+    this.difficulty = Number.isInteger(this.difficulty) && Object.hasOwn(DIFFICULTIES, this.difficulty) ? this.difficulty : DEFAULT_DIFFICULTY;
     this.grid = createBattlefield(); this.bfsResult = bfs(this.grid, { col: 0, row: 5 }, { col: 16, row: 6 });
     this.path = this.bfsResult.path.map(p => ({ ...p, x: p.col - 8, z: p.row - 6 }));
     this.health = 100; this.coins = 200; this.wave = 1; this.phase = 'ready'; this.paused = false; this.speed = 1;
     this.towers = []; this.enemies = []; this.projectiles = new LinkedList(); this.enemyTree = new BinarySearchTree();
     this.spawnQueue = new CircularQueue(128); this.undoStack = new Stack(); this.redoStack = new Stack(); this.targetHeap = new MaxHeap();
     this.selectedTowerId = null; this.effects = []; this.operations = []; this.nextId = 1; this.time = 0; this.accumulator = 0; this.spawnClock = 0; this.seed = 2764293; this.runId++;
-    this.waveStats = { kills: 0, leaked: 0, damage: 0, coins: 0, started: 0 }; this.totalKills = 0; this.lastTargetId = null; this.heapTowerId = null;
+    this.waveStats = { kills: 0, leaked: 0, damage: 0, coins: 0, started: 0 }; this.waveTotal = 0; this.totalKills = 0; this.lastTargetId = null; this.heapTowerId = null;
     this.log('BFS', 'find shortest route', 'O(V + E)', 'A circular queue explores orthogonal path cells and stores predecessors.', this.bfsResult.order.map(p => `${p.col},${p.row}`));
     return success('A new grove awaits.');
   }
   random() { this.seed = (Math.imul(1664525, this.seed) + 1013904223) >>> 0; return this.seed / 4294967296; }
-  log(structure, operation, complexity, explanation, nodes = []) { this.operations.push({ structure, operation, complexity, explanation, nodes, time: this.time }); if (this.operations.length > 30) this.operations.shift(); }
-  emit(type, data = {}) { this.effects.push({ type, time: this.time, ...data }); if (this.effects.length > 500) this.effects.shift(); }
+  log(structure, operation, complexity, explanation, nodes = []) {
+    this.operations.push({ structure, operation, complexity, explanation, nodes, time: this.time });
+    // Each inspector tab keeps its own recent evidence; firing must not erase a completed BFS or queue operation.
+    let count = 0;
+    for (let index = this.operations.length - 1; index >= 0; index--) {
+      if (this.operations[index].structure === structure && ++count > 12) { this.operations.splice(index, 1); break; }
+    }
+  }
+  emit(type, data = {}) { this.effects.push({ ...data, entityType: data.type, type, time: this.time }); if (this.effects.length > 500) this.effects.shift(); }
   drainEffects() { const events = this.effects; this.effects = []; return events; }
   getTower(id = this.selectedTowerId) { return this.towers.find(tower => tower.id === id); }
   selectTower(id) { this.selectedTowerId = this.getTower(id) ? id : null; return success('Selection updated.'); }
@@ -57,7 +65,7 @@ export class GameEngine {
     if (modifiers.damage) tower.stats.damage *= modifiers.damage; if (modifiers.interval) tower.stats.interval *= modifiers.interval; if (modifiers.range) tower.stats.range += modifiers.range; if (modifiers.multishot) tower.stats.multishot = modifiers.multishot; if (modifiers.chain) tower.stats.chain = modifiers.chain;
     tower.upgradeNode = upgrade.id; tower.level++; tower.invested += upgrade.cost; this.coins -= upgrade.cost;
     this.recordAction({ kind: 'upgrade', id, before, after: this.towerSnapshot(tower), coinDelta: -upgrade.cost });
-    this.log('Binary tree', 'choose upgrade branch', 'O(h)', 'Only the left or right child of the current upgrade node may be chosen.', [before.upgradeNode, upgrade.id]);
+    this.log('Binary tree', 'choose upgrade branch', 'O(u) node lookup', 'Depth-first search locates the current node; only its left or right child may be chosen.', [before.upgradeNode, upgrade.id]);
     this.emit('upgrade', { ...tower }); return success(`${upgrade.name} awakens.`);
   }
   sell(id = this.selectedTowerId) {
@@ -85,9 +93,14 @@ export class GameEngine {
   setTargetMode(id, mode) { const tower = this.getTower(id); if (!tower || !['first', 'last', 'strongest', 'weakest'].includes(mode)) return failure('Choose a valid target mode.'); tower.mode = mode; return success(`Targeting ${mode}.`); }
   togglePause() { this.paused = !this.paused; return success(this.paused ? 'The grove is resting.' : 'The grove awakens.'); }
   cycleSpeed() { this.speed = this.speed === 1 ? 2 : this.speed === 2 ? 3 : 1; return success(`${this.speed}× game speed.`); }
+  setDifficulty(value) {
+    if (!Number.isInteger(value) || !Object.hasOwn(DIFFICULTIES, value)) return failure('Choose a difficulty from 1 to 5.');
+    if (this.phase !== 'ready') return failure('Adjust difficulty between waves.');
+    this.difficulty = value; return success(`${DIFFICULTIES[value].name} difficulty selected.`);
+  }
   startWave() {
     if (this.phase !== 'ready') return failure('Finish the current wave first.');
-    const entries = generateWave(this.wave); this.spawnQueue = new CircularQueue(128); entries.forEach(entry => this.spawnQueue.enqueue(entry));
+    const entries = generateWave(this.wave, this.difficulty); this.spawnQueue = new CircularQueue(128); entries.forEach(entry => this.spawnQueue.enqueue(entry));
     this.phase = 'wave'; this.paused = false; this.spawnClock = 0.3; this.waveStats = { kills: 0, leaked: 0, damage: 0, coins: 0, started: this.time }; this.waveTotal = entries.length;
     this.log('Circular queue', 'enqueue wave', 'O(n) for n enemies', 'FIFO preserves the authored wave sequence; head and tail wrap around a fixed buffer.', entries.map(e => e.type));
     this.emit('wave-start', { wave: this.wave, count: entries.length }); return success(`Wave ${this.wave} enters the forest.`);
@@ -119,8 +132,8 @@ export class GameEngine {
     if (this.spawnQueue.isEmpty() && this.enemies.length === 0) this.completeWave();
   }
   spawn(type) {
-    const definition = ENEMY_TYPES[type], scale = 1 + (this.wave - 1) * (type === 'boss' ? 0.12 : 0.22), maxHp = Math.round(definition.hp * scale);
-    const start = this.path[0], enemy = { id: this.nextId++, type, hp: maxHp, maxHp, speed: definition.speed * (1 + (this.wave - 1) * 0.018), velocity: 0.15, x: start.x, z: start.z, progress: 0, angle: Math.PI / 2, heading: Math.PI / 2, reward: Math.round(definition.reward * (1 + this.wave * 0.075)), baseDamage: definition.baseDamage, slowUntil: 0, slowFactor: 1, bornAt: this.time, hitAt: -10, seed: this.random() };
+    const profile = DIFFICULTIES[this.difficulty], definition = ENEMY_TYPES[type], scale = 1 + (this.wave - 1) * (type === 'boss' ? 0.12 : 0.22), maxHp = Math.round(definition.hp * scale * profile.hp);
+    const start = this.path[0], enemy = { id: this.nextId++, type, hp: maxHp, maxHp, speed: definition.speed * (1 + (this.wave - 1) * 0.018) * profile.speed, velocity: 0.15, x: start.x, z: start.z, progress: 0, angle: Math.PI / 2, heading: Math.PI / 2, reward: Math.max(1, Math.round(definition.reward * (1 + this.wave * 0.075) * profile.reward)), baseDamage: definition.baseDamage, slowUntil: 0, slowFactor: 1, bornAt: this.time, hitAt: -10, seed: this.random() };
     this.enemies.push(enemy); this.enemyTree.insert(enemy.id, enemy); this.log('BST', 'insert enemy ID', 'O(h), worst O(n)', 'An ordinary, unbalanced BST indexes live enemy objects by unique ID.', [enemy.id]); this.emit('spawn', { ...enemy }); return enemy;
   }
   priorityCompare(mode) {
@@ -138,7 +151,7 @@ export class GameEngine {
   pickTarget(tower) {
     const heap = this.refreshTargetHeap(tower);
     const target = heap.extractMax(); this.lastTargetId = target?.id ?? null;
-    if (target) this.log('Max heap', 'extractMax target', 'O(k log k) rebuild; O(log k) extract', 'Current positions and health rebuild the in-range priority heap before every shot.', [target.id]);
+    if (target) this.log('Max heap', 'extractMax target', 'O(n + k log k) rebuild; O(log k) extract', 'Scan all n enemies and insert k in-range enemies using current positions and health before every shot.', [target.id]);
     return target;
   }
   fire(tower, target) {
@@ -176,8 +189,8 @@ export class GameEngine {
     this.enemies = this.enemies.filter(enemy => { if (enemy.hp > 0) return true; this.enemyTree.delete(enemy.id); this.log('BST', 'delete enemy ID', 'O(h), worst O(n)', 'Projectiles can no longer retrieve the removed enemy; two-child removal uses the inorder successor.', [enemy.id]); if (!enemy.escaped) { this.coins += enemy.reward; this.waveStats.coins += enemy.reward; this.waveStats.kills++; this.totalKills++; this.emit('death', { enemyId: enemy.id, enemyType: enemy.type, x: enemy.x, z: enemy.z, reward: enemy.reward }); } return false; });
   }
   completeWave() {
-    const reward = 32 + this.wave * 7; this.coins += reward;
-    const record = { id: ++this.recordId, run: this.runId, wave: this.wave, kills: this.waveStats.kills, leaked: this.waveStats.leaked, damage: Math.round(this.waveStats.damage), earned: this.waveStats.coins + reward, health: this.health, duration: Math.round((this.time - this.waveStats.started) * 10) / 10 };
+    const reward = Math.round((32 + this.wave * 7) * DIFFICULTIES[this.difficulty].reward); this.coins += reward;
+    const record = { id: ++this.recordId, run: this.runId, wave: this.wave, difficulty: this.difficulty, kills: this.waveStats.kills, leaked: this.waveStats.leaked, damage: Math.round(this.waveStats.damage), earned: this.waveStats.coins + reward, health: this.health, duration: Math.round((this.time - this.waveStats.started) * 10) / 10 };
     this.history.insert(record.id, record); this.log('B-tree', 'insert completed wave', 'O(log n)', 'Full nodes split around their median; completed wave records remain in key order.', [record.id]);
     try { this.storage?.setItem(HISTORY_KEY, JSON.stringify(this.history.traverse())); } catch { /* A full storage quota does not interrupt play. */ }
     this.projectiles = new LinkedList(); this.emit('wave-complete', { wave: this.wave, reward, record });
@@ -199,12 +212,12 @@ export class GameEngine {
       operations: this.operations.slice(),
     };
   }
-  serialize() { return { version: 1, health: this.health, coins: this.coins, wave: this.wave, phase: this.phase, paused: this.paused, speed: this.speed, time: this.time, accumulator: this.accumulator, spawnClock: this.spawnClock, nextId: this.nextId, seed: this.seed, towers: copy(this.towers), enemies: copy(this.enemies), projectiles: copy(this.projectiles.toArray()), queue: copy(this.spawnQueue.toArray()), undo: copy(this.undoStack.toArray()), redo: copy(this.redoStack.toArray()), history: copy(this.history.traverse()), recordId: this.recordId, runId: this.runId, selectedTowerId: this.selectedTowerId, waveStats: copy(this.waveStats), waveTotal: this.waveTotal || 0, totalKills: this.totalKills }; }
+  serialize() { return { version: 1, difficulty: this.difficulty, health: this.health, coins: this.coins, wave: this.wave, phase: this.phase, paused: this.paused, speed: this.speed, time: this.time, accumulator: this.accumulator, spawnClock: this.spawnClock, nextId: this.nextId, seed: this.seed, towers: copy(this.towers), enemies: copy(this.enemies), projectiles: copy(this.projectiles.toArray()), queue: copy(this.spawnQueue.toArray()), undo: copy(this.undoStack.toArray()), redo: copy(this.redoStack.toArray()), history: copy(this.history.traverse()), recordId: this.recordId, runId: this.runId, selectedTowerId: this.selectedTowerId, waveStats: copy(this.waveStats), waveTotal: this.waveTotal || 0, totalKills: this.totalKills }; }
   restore(data) {
     try {
       const prepared = validateSave(data), saved = prepared.data;
       const next = { grid: prepared.grid, towers: saved.towers, enemies: saved.enemies, enemyTree: new BinarySearchTree(), projectiles: new LinkedList(), spawnQueue: new CircularQueue(128), undoStack: new Stack(), redoStack: new Stack(), history: new BTree(2) };
-      for (const field of ['health', 'coins', 'wave', 'phase', 'paused', 'speed', 'time', 'accumulator', 'spawnClock', 'nextId', 'seed', 'recordId', 'runId', 'selectedTowerId', 'waveStats', 'waveTotal', 'totalKills']) next[field] = saved[field];
+      for (const field of ['difficulty', 'health', 'coins', 'wave', 'phase', 'paused', 'speed', 'time', 'accumulator', 'spawnClock', 'nextId', 'seed', 'recordId', 'runId', 'selectedTowerId', 'waveStats', 'waveTotal', 'totalKills']) next[field] = saved[field];
       next.enemies.forEach(enemy => next.enemyTree.insert(enemy.id, enemy)); saved.projectiles.forEach(projectile => next.projectiles.insert(projectile)); saved.queue.forEach(entry => next.spawnQueue.enqueue(entry));
       saved.undo.forEach(action => next.undoStack.push(action)); saved.redo.forEach(action => next.redoStack.push(action));
       // Retain newer device history when loading an older snapshot; prepare the merge without touching live nodes.
@@ -212,7 +225,11 @@ export class GameEngine {
       for (const record of saved.history) if (!next.history.search(record.id)) next.history.insert(record.id, record);
       next.history.traverse(record => { next.recordId = Math.max(next.recordId, record.id); next.runId = Math.max(next.runId, record.run); });
       Object.assign(this, next, { targetHeap: new MaxHeap(), lastTargetId: null, heapTowerId: null, effects: [], operations: [] });
-      this.log('BST + linked list + queue', 'restore saved grove', 'O(n²) worst-case unbalanced BST', 'Validated data is prepared independently, then atomically replaces live state.');
+      this.log('BST', 'restore live enemy index', 'O(n²) worst-case unbalanced BST', 'Insert validated live enemy objects into an independent BST before atomically replacing the active simulation.', next.enemies.map(enemy => enemy.id));
+      this.log('Linked list', 'restore active projectiles', 'O(p) for p projectiles', 'Append validated projectiles in saved traversal order to reconstruct the head, tail and links.', saved.projectiles.map(projectile => projectile.id));
+      this.log('Circular queue', 'restore pending wave', 'O(n) for n queued enemies', 'Enqueue the saved pending invaders in their original FIFO order.', saved.queue.map(entry => entry.type));
+      this.log('Stack', 'restore player decisions', 'O(a) for a decisions', 'Push saved undo and redo entries in their recorded order, preserving tower snapshots and coin deltas.', [...saved.undo, ...saved.redo].map(action => action.id));
+      this.log('B-tree', 'restore wave history', 'O(h log h) for h records', 'Merge device history with the saved records in a new B-tree, retaining newer completed waves.', next.history.traverse().map(record => record.id));
       return success('Your grove has been restored.');
     } catch (error) { return failure(error instanceof Error && !error.message.includes('JSON') ? error.message : 'That saved grove could not be read.'); }
   }

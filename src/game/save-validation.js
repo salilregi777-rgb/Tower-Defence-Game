@@ -1,4 +1,4 @@
-import { TOWER_TYPES, ENEMY_TYPES, createBattlefield, createUpgradeTrees } from './config.js';
+import { DEFAULT_DIFFICULTY, DIFFICULTIES, TOWER_TYPES, ENEMY_TYPES, createBattlefield, createUpgradeTrees } from './config.js';
 
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const finite = (value, min = 0, max = Number.MAX_SAFE_INTEGER) => Number.isFinite(value) && value >= min && value <= max;
@@ -10,6 +10,8 @@ const list = (value, max = 10000) => Array.isArray(value) && value.length <= max
 export function validateSave(input) {
   const data = JSON.parse(JSON.stringify(input));
   check(object(data) && data.version === 1, 'This saved grove is not compatible.');
+  if (!Object.hasOwn(data, 'difficulty')) data.difficulty = DEFAULT_DIFFICULTY;
+  check(Number.isInteger(data.difficulty) && Object.hasOwn(DIFFICULTIES, data.difficulty), 'Invalid saved difficulty.');
   for (const key of ['towers', 'enemies', 'projectiles', 'queue', 'undo', 'redo', 'history']) check(list(data[key]), `Invalid saved ${key}.`);
   check(integer(data.health, 0, 100) && integer(data.coins) && integer(data.wave, 1, 10), 'Invalid saved economy.');
   check(['ready', 'wave', 'victory', 'defeat'].includes(data.phase) && typeof data.paused === 'boolean' && [1, 2, 3].includes(data.speed), 'Invalid saved game state.');
@@ -50,7 +52,11 @@ export function validateSave(input) {
     for (const tower of [action.before, action.after]) if (tower) { towerValid(tower); check(tower.id === action.id, 'Decision ID does not match its tower.'); }
     const expectedDelta = action.kind === 'place' ? -action.after.invested : action.kind === 'sell' ? Math.floor(action.before.invested * 0.7) : action.before.invested - action.after.invested;
     check(action.coinDelta === expectedDelta, 'Invalid saved decision economy.');
-    if (action.runtime) check(object(action.runtime) && finite(action.runtime.cooldownReadyAt) && ['first', 'last', 'strongest', 'weakest'].includes(action.runtime.mode), 'Invalid saved decision cooldown.');
+    if (action.runtime !== undefined) {
+      const runtime = action.runtime;
+      check(object(runtime) && finite(runtime.cooldownReadyAt, 0, data.time + 20) && ['first', 'last', 'strongest', 'weakest'].includes(runtime.mode), 'Invalid saved decision cooldown.');
+      check((runtime.firedAt === undefined || finite(runtime.firedAt, 0, data.time)) && (runtime.targetId === undefined || knownId(runtime.targetId)), 'Invalid saved decision targeting.');
+    }
   }
   const recordIds = new Set();
   for (const record of data.history) {
@@ -62,5 +68,5 @@ export function validateSave(input) {
 }
 
 export function validHistoryRecord(record) {
-  return object(record) && integer(record.id, 1) && integer(record.run, 1) && integer(record.wave, 1, 10) && integer(record.kills) && integer(record.leaked) && integer(record.damage) && integer(record.earned) && integer(record.health, 0, 100) && finite(record.duration);
+  return object(record) && integer(record.id, 1) && integer(record.run, 1) && integer(record.wave, 1, 10) && integer(record.kills) && integer(record.leaked) && integer(record.damage) && integer(record.earned) && integer(record.health, 0, 100) && finite(record.duration) && (record.difficulty === undefined || (Number.isInteger(record.difficulty) && Object.hasOwn(DIFFICULTIES, record.difficulty)));
 }

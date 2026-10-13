@@ -133,4 +133,187 @@ test('undefended enemies harm the grove and eventually trigger defeat; restart r
   const game = engine();
   for (let wave = 0; wave < 10 && game.phase !== 'defeat'; wave++) { game.startWave(); for (let step = 0; step < 12000 && game.phase === 'wave'; step++) game.update(1 / 60); }
   assert.equal(game.phase, 'defeat'); assert.equal(game.health, 0); game.restart(); assert.equal(game.health, 100); assert.equal(game.coins, 200); assert.equal(game.wave, 1); assert.equal(game.phase, 'ready'); assert.equal(game.enemies.length, 0); assert.equal(game.projectiles.size, 0); assert.equal(game.undoStack.size, 0);
+  assert.equal(game.waveTotal, 0);
+});
+
+test('visual effect event names survive tower and enemy type payloads', () => {
+  const game = engine(); game.place('archer', 5, 8); const id = game.selectedTowerId;
+  game.upgrade(id, 'power'); game.sell(id); game.spawn('runner');
+  const effects = game.drainEffects();
+  assert.deepEqual(effects.map(effect => effect.type), ['placement', 'upgrade', 'sell', 'spawn']);
+  assert.deepEqual(effects.map(effect => effect.entityType), ['archer', 'archer', 'archer', 'runner']);
+  game.time = 4; game.emit('impact', { type: 'cannon', time: 999 });
+  assert.equal(game.effects[0].type, 'impact'); assert.equal(game.effects[0].time, 4);
+  assert.equal(game.effects[0].entityType, 'cannon');
+});
+
+test('upgrade undo preserves live targeting, attack clocks, tower identity and firing order', () => {
+  const game = engine(); game.place('archer', 5, 8); const tower = game.getTower();
+  game.place('archer', 9, 5); const order = game.towers.slice();
+  game.upgrade(tower.id, 'power');
+  Object.assign(tower, { mode: 'strongest', cooldown: 0.61, targetId: 700, firedAt: 3.5 });
+  assert.equal(game.undo().ok, true); assert.equal(game.getTower(tower.id), tower);
+  assert.deepEqual(game.towers, order); assert.equal(tower.stats.damage, 18);
+  assert.equal(tower.mode, 'strongest'); assert.equal(tower.cooldown, 0.61); assert.equal(tower.targetId, 700); assert.equal(tower.firedAt, 3.5);
+  assert.equal(game.redo().ok, true); assert.equal(game.getTower(tower.id), tower); assert.ok(tower.stats.damage > 18);
+  assert.equal(tower.mode, 'strongest'); assert.equal(tower.cooldown, 0.61);
+});
+
+test('sale undo retains elapsed attack cooldown and current target preferences', () => {
+  const game = engine(); game.place('archer', 5, 8); const tower = game.getTower();
+  tower.cooldown = 0.8; tower.mode = 'last'; tower.firedAt = 0;
+  game.sell(tower.id); run(game, 0.3); assert.equal(game.undo().ok, true);
+  assert.ok(Math.abs(game.getTower(tower.id).cooldown - 0.5) < 1e-8);
+  assert.equal(game.getTower(tower.id).mode, 'last'); assert.equal(game.getTower(tower.id).firedAt, 0);
+  game.redo(); run(game, 1); game.undo(); assert.equal(game.getTower(tower.id).cooldown, 0);
+});
+
+test('inspector reconstructs an actual heap after priorities and range change', () => {
+  const game = engine(); game.place('archer', 5, 8); const tower = game.getTower();
+  const enemies = [4, 8, 6, 1, 3].map((progress, i) => Object.assign(game.spawn('basic'), { x: tower.x, z: tower.z, hp: 10 + i, progress }));
+  game.pickTarget(tower); enemies[0].progress = 15; enemies[1].hp = 0; enemies[2].x = 100;
+  for (const mode of ['first', 'last', 'strongest', 'weakest']) {
+    game.setTargetMode(tower.id, mode); const snapshot = game.inspector(), compare = game.priorityCompare(mode);
+    const heap = snapshot.heap.map(value => game.enemyTree.search(value.id));
+    assert.equal(heap.length, 3); assert.equal(snapshot.heapMode, mode); assert.equal(snapshot.heapTargetId, heap[0].id);
+    for (let index = 1; index < heap.length; index++) assert.ok(compare(heap[Math.floor((index - 1) / 2)], heap[index]) >= 0);
+  }
+  assert.equal(game.lastTargetId, enemies[1].id, 'inspecting must not overwrite the actual last shot');
+});
+
+test('invalid save metadata and decisions never partially replace the live simulation', () => {
+  const game = engine(); game.place('archer', 5, 8); game.startWave(); run(game, 2);
+  const before = game.serialize(), towers = game.towers, enemies = game.enemies, tree = game.enemyTree, history = game.history;
+  const mutations = [
+    save => { save.undo = [null]; },
+    save => { save.undo[0].after.stats = null; },
+    save => { save.undo[0].coinDelta = 0; },
+    save => { save.undo[0].runtime = null; },
+    save => { save.undo[0].runtime = { cooldownReadyAt: save.time, mode: 'first', targetId: {} }; },
+    save => { save.undo[0].runtime = { cooldownReadyAt: save.time, mode: 'first', firedAt: [] }; },
+    save => { save.history = [null]; },
+    save => { save.waveStats = null; },
+    save => { save.paused = 'false'; },
+    save => { save.selectedTowerId = 0; },
+    save => { save.recordId = '0'; },
+    save => { save.queue[0].delay = false; },
+    save => { save.enemies[0].hp = -1; },
+    save => { save.towers.push(structuredClone(save.towers[0])); },
+  ];
+  for (const mutate of mutations) {
+    const save = structuredClone(before); mutate(save);
+    assert.equal(game.restore(save).ok, false); assert.deepEqual(game.serialize(), before);
+    assert.equal(game.towers, towers); assert.equal(game.enemies, enemies); assert.equal(game.enemyTree, tree); assert.equal(game.history, history);
+  }
+});
+
+test('save/load preserves an empty selection and detaches restored objects from its input', () => {
+  const original = engine(); original.place('archer', 5, 8); original.selectTower(null);
+  const saved = original.serialize(), game = engine(); assert.equal(game.restore(saved).ok, true);
+  assert.equal(game.selectedTowerId, null); assert.deepEqual(game.serialize(), saved);
+  saved.towers[0].stats.damage = 999; assert.equal(game.towers[0].stats.damage, 18);
+});
+
+test('BFS rejects blocked endpoints, malformed coordinates and nonrectangular grids', () => {
+  const grid = [['obstacle', 'path'], ['path', 'path']];
+  assert.deepEqual(bfs(grid, { col: 0, row: 0 }, { col: 1, row: 1 }).path, []);
+  assert.deepEqual(bfs(grid, { col: 1, row: 1 }, { col: 0, row: 0 }).path, []);
+  assert.deepEqual(bfs(grid, { col: 0.5, row: 1 }, { col: 1, row: 1 }).path, []);
+  assert.deepEqual(bfs([['path'], ['path', 'path']], { col: 0, row: 0 }, { col: 0, row: 1 }).path, []);
+  assert.deepEqual(bfs([], { col: 0, row: 0 }, { col: 0, row: 0 }).path, []);
+});
+
+test('difficulty changes are exact, between-wave decisions and survive restart', () => {
+  const game = engine(); assert.equal(game.difficulty, 3);
+  for (const invalid of [0, 6, 2.5, '4', null, undefined, NaN, Infinity, true]) {
+    const before = game.serialize(); assert.equal(game.setDifficulty(invalid).ok, false); assert.deepEqual(game.serialize(), before);
+  }
+  assert.equal(game.setDifficulty(5).ok, true); assert.equal(game.difficulty, 5);
+  game.startWave(); run(game, 1); const active = game.serialize();
+  assert.equal(game.setDifficulty(1).ok, false); assert.deepEqual(game.serialize(), active);
+  game.togglePause(); assert.equal(game.setDifficulty(1).ok, false, 'pausing must not unlock active wave difficulty');
+  game.restart(); assert.equal(game.difficulty, 5); assert.equal(game.health, 100); assert.equal(game.coins, 200);
+  assert.equal(game.setDifficulty(2).ok, true); assert.equal(game.difficulty, 2);
+  game.phase = 'victory'; assert.equal(game.setDifficulty(1).ok, false);
+  game.phase = 'defeat'; assert.equal(game.setDifficulty(1).ok, false);
+});
+
+test('harder difficulty creates healthier faster crowds, shorter spawn intervals and lower individual rewards', () => {
+  const games = [1, 2, 3, 4, 5].map(value => { const game = engine(); game.setDifficulty(value); game.wave = 10; game.startWave(); return game; });
+  const invaders = games.map(game => game.spawn('tank'));
+  for (let index = 1; index < games.length; index++) {
+    assert.ok(invaders[index].maxHp > invaders[index - 1].maxHp);
+    assert.ok(invaders[index].speed > invaders[index - 1].speed);
+    assert.ok(invaders[index].reward <= invaders[index - 1].reward);
+    assert.ok(games[index].spawnQueue.peek().delay < games[index - 1].spawnQueue.peek().delay);
+    assert.ok(games[index].waveTotal >= games[index - 1].waveTotal);
+    assert.equal(games[index].spawnQueue.toArray().filter(entry => entry.type === 'boss').length, 1);
+  }
+  assert.ok(games[4].waveTotal > games[2].waveTotal);
+  assert.equal(invaders[2].maxHp, Math.round(168 * (1 + 9 * 0.22) * 1.35), 'default is harder than the original baseline');
+});
+
+test('difficulty persists in active saves, legacy saves migrate, and invalid values fail atomically', () => {
+  const original = engine(); original.setDifficulty(5); original.place('archer', 5, 8); original.startWave(); run(original, 2);
+  const saved = original.serialize(), restored = engine(); assert.equal(restored.restore(saved).ok, true); assert.equal(restored.difficulty, 5);
+  run(original, 3); run(restored, 3); assert.deepEqual(restored.serialize(), original.serialize());
+  const before = restored.serialize();
+  for (const difficulty of [0, 6, 1.5, '3', null, false]) {
+    assert.equal(restored.restore({ ...before, difficulty }).ok, false); assert.deepEqual(restored.serialize(), before);
+  }
+  const legacy = structuredClone(saved); delete legacy.difficulty;
+  assert.equal(restored.restore(legacy).ok, true); assert.equal(restored.difficulty, 3);
+  assert.equal(legacy.difficulty, undefined, 'migration must not modify the caller snapshot');
+});
+
+test('keeping only starter defenses loses, while reinvesting earned seeds can beat Siege', () => {
+  const positions = [['archer', 5, 8], ['frost', 7, 7], ['archer', 9, 5], ['cannon', 7, 3], ['lightning', 12, 4], ['archer', 4, 6], ['cannon', 9, 8], ['lightning', 11, 3], ['archer', 6, 10], ['frost', 12, 6]];
+  const campaign = (difficulty, reinvest) => {
+    const game = engine(); game.setDifficulty(difficulty);
+    for (let wave = 1; wave <= 10 && game.phase !== 'defeat'; wave++) {
+      if (wave === 1 || reinvest) {
+        for (const [type, col, row] of positions) if (game.grid[row][col] === 'build') game.place(type, col, row);
+        for (const tower of game.towers) for (let upgrade = 0; upgrade < 2; upgrade++) { const options = game.getUpgradeOptions(tower.id); if (options.length) game.upgrade(tower.id, options[0].id); }
+      }
+      assert.ok(game.coins >= 0); assert.equal(game.startWave().ok, true);
+      for (let frame = 0; frame < 12000 && game.phase === 'wave'; frame++) game.update(1 / 60);
+      assert.notEqual(game.phase, 'wave');
+    }
+    return game;
+  };
+  const gentle = campaign(1, false), resolute = campaign(3, false), siege = campaign(5, false);
+  for (const game of [gentle, resolute, siege]) { assert.equal(game.phase, 'defeat'); assert.ok(game.coins > 0, 'unspent rewards cannot defend the grove'); }
+  assert.ok(siege.wave < resolute.wave); assert.ok(resolute.wave < gentle.wave);
+  const victory = campaign(5, true); assert.equal(victory.phase, 'victory'); assert.ok(victory.health > 0 && victory.health < 100);
+  assert.ok(victory.towers.reduce((total, tower) => total + tower.invested, 0) > 200, 'the victory strategy reinvests earned income');
+  assert.ok(victory.history.traverse().every(record => record.difficulty === 5));
+  const restored = engine(); assert.equal(restored.restore(victory.serialize()).ok, true);
+  const invalid = victory.serialize(); invalid.history[0].difficulty = '5'; assert.equal(restored.restore(invalid).ok, false);
+  const legacy = victory.serialize(); legacy.history.forEach(record => { delete record.difficulty; }); assert.equal(engine().restore(legacy).ok, true);
+});
+
+test('inspector retains actual queue and decision operations after sustained combat', () => {
+  const game = engine(); game.place('archer', 5, 8); game.upgrade(game.selectedTowerId, 'power'); game.place('frost', 7, 7); game.startWave();
+  run(game, 25);
+  const operations = game.inspector().operations;
+  for (const structure of ['BFS', 'Stack', 'Binary tree', 'Circular queue', 'Max heap', 'Linked list', 'BST']) {
+    const events = operations.filter(operation => operation.structure === structure);
+    assert.ok(events.length > 0, `${structure} must retain actual evidence after other structures become busy`);
+    assert.ok(events.length <= 12, `${structure} history remains bounded`);
+  }
+  assert.equal(operations.filter(operation => operation.structure === 'Circular queue').at(-1).operation, 'dequeue enemy');
+  assert.equal(operations.find(operation => operation.structure === 'BFS').operation, 'find shortest route');
+  assert.ok(operations.length <= 8 * 12);
+  for (let index = 1; index < operations.length; index++) assert.ok(operations[index].time >= operations[index - 1].time);
+  game.restart(); assert.deepEqual(game.operations.map(operation => operation.structure), ['BFS']);
+});
+
+test('restored structures expose operations under the inspector tab identifiers', () => {
+  const original = engine(); original.place('archer', 5, 8); original.startWave(); run(original, 4);
+  const restored = engine(); assert.equal(restored.restore(original.serialize()).ok, true);
+  const operations = restored.inspector().operations;
+  for (const structure of ['BST', 'Linked list', 'Circular queue', 'Stack', 'B-tree']) assert.equal(operations.filter(operation => operation.structure === structure).length, 1);
+  assert.deepEqual(operations.find(operation => operation.structure === 'Circular queue').nodes, restored.spawnQueue.toArray().map(entry => entry.type));
+  assert.deepEqual(operations.find(operation => operation.structure === 'BST').nodes, restored.enemies.map(enemy => enemy.id));
+  assert.deepEqual(operations.find(operation => operation.structure === 'Linked list').nodes, restored.projectiles.toArray().map(projectile => projectile.id));
 });
