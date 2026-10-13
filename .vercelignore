@@ -1,0 +1,8 @@
+.git
+.openai
+.sites
+dist
+docs
+tests
+*.tar.gz
+public/landing-pages/inner-green-3d.original.html
