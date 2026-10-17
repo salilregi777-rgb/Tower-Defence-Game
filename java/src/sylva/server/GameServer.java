@@ -17,7 +17,8 @@ public final class GameServer {
     private final Path webRoot=Path.of("..").toAbsolutePath().normalize();
     private final ScheduledExecutorService clock=Executors.newSingleThreadScheduledExecutor(r->{Thread t=new Thread(r,"sylva-game-clock");t.setDaemon(true);return t;});
     private GameServer(int port)throws IOException{
-        server=HttpServer.create(new InetSocketAddress("127.0.0.1",port),0);
+        String host=System.getenv().getOrDefault("HOST_JAVA","127.0.0.1");
+        server=HttpServer.create(new InetSocketAddress(host,port),0);
         server.createContext("/api/health",e->respond(e,200,Map.of("ok",true,"service","sylva-java")));
         server.createContext("/api/state",e->{synchronized(game){respond(e,200,map("state",state(),"inspector",inspector()));}});
         server.createContext("/api/inspector",e->{synchronized(game){respond(e,200,inspector());}});
@@ -26,7 +27,7 @@ public final class GameServer {
         server.setExecutor(Executors.newFixedThreadPool(4,r->{Thread t=new Thread(r,"sylva-api");t.setDaemon(true);return t;}));
         clock.scheduleAtFixedRate(()->{synchronized(game){game.update(1.0/60);}},0,16,TimeUnit.MILLISECONDS);
     }
-    public static void main(String[] args)throws Exception{int port=args.length==0?5173:Integer.parseInt(args[0]);GameServer app=new GameServer(port);app.server.start();System.out.println("SYLVA Java service and Three.js UI: http://127.0.0.1:"+port);}
+    public static void main(String[] args)throws Exception{int port=args.length==0?5173:Integer.parseInt(args[0]);GameServer app=new GameServer(port);app.server.start();System.out.println("SYLVA Java service and Three.js UI listening on port "+port);}
     private void staticFile(HttpExchange e)throws IOException{if(!e.getRequestMethod().equals("GET")&& !e.getRequestMethod().equals("HEAD")){respond(e,405,Map.of("ok",false,"message","Method not allowed."));return;}String request=e.getRequestURI().getPath();Path target=webRoot.resolve("."+request).normalize();if(!target.startsWith(webRoot)){e.sendResponseHeaders(403,-1);e.close();return;}if(Files.isDirectory(target))target=target.resolve("index.html");if(!Files.isRegularFile(target)){e.sendResponseHeaders(404,-1);e.close();return;}String name=target.getFileName().toString();String type=name.endsWith(".html")?"text/html":name.endsWith(".js")?"text/javascript":name.endsWith(".css")?"text/css":name.endsWith(".json")?"application/json":name.endsWith(".woff2")?"font/woff2":name.endsWith(".svg")?"image/svg+xml":name.endsWith(".png")?"image/png":name.endsWith(".jpg")||name.endsWith(".jpeg")?"image/jpeg":name.endsWith(".webp")?"image/webp":"application/octet-stream";e.getResponseHeaders().set("Content-Type",type+((type.startsWith("text/")||type.equals("application/json"))?"; charset=utf-8":""));e.getResponseHeaders().set("Cache-Control","no-cache");if(e.getRequestMethod().equals("HEAD")){e.sendResponseHeaders(200,-1);e.close();return;}byte[] bytes=Files.readAllBytes(target);e.sendResponseHeaders(200,bytes.length);try(OutputStream out=e.getResponseBody()){out.write(bytes);}}
     private void action(HttpExchange e)throws IOException{
         if(!e.getRequestMethod().equals("POST")){respond(e,405,Map.of("ok",false,"message","Use POST for game actions."));return;}
