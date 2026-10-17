@@ -20,8 +20,8 @@ public final class GameServer {
         String host=System.getenv().getOrDefault("HOST_JAVA","127.0.0.1");
         server=HttpServer.create(new InetSocketAddress(host,port),0);
         server.createContext("/api/health",e->respond(e,200,Map.of("ok",true,"service","sylva-java")));
-        server.createContext("/api/state",e->{synchronized(game){respond(e,200,map("state",state(),"inspector",inspector()));}});
-        server.createContext("/api/inspector",e->{synchronized(game){respond(e,200,inspector());}});
+        server.createContext("/api/state",e->{Object snapshot;synchronized(game){snapshot=map("state",state());}respond(e,200,snapshot);});
+        server.createContext("/api/inspector",e->{Object snapshot;synchronized(game){snapshot=inspector();}respond(e,200,snapshot);});
         server.createContext("/api/action",this::action);
         server.createContext("/",this::staticFile);
         server.setExecutor(Executors.newFixedThreadPool(4,r->{Thread t=new Thread(r,"sylva-api");t.setDaemon(true);return t;}));

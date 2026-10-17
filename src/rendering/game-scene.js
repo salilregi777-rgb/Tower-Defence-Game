@@ -265,7 +265,7 @@ export function createGameScene(world, engine, callbacks = {}) {
   }
 
   function makeEnemy(enemy) {
-    const object = new THREE.Group(), body = new THREE.Group(); object.add(body); object.userData.body = body; object.userData.type = enemy.type;
+    const object = new THREE.Group(), body = new THREE.Group(); object.add(body); object.userData.body = body; object.userData.type = enemy.type; object.userData.renderPosition = new THREE.Vector2(enemy.x, enemy.z); object.userData.slowVisual = null;
     const definition = ENEMY_TYPES[enemy.type], size = definition.size, armor = mat(definition.color, { roughness: .77 }), shellMaterial = mat(enemy.type === 'resistant' ? '#73777d' : enemy.type === 'boss' ? '#514737' : '#687052', { roughness: .88 }); grainMaterial(shellMaterial, .22, 50);
     const legs = [], n = enemy.type === 'runner' ? 4 : 3;
     for (let i = 0; i < n; i++) for (const sign of [-1, 1]) { const leg = new THREE.Group(); leg.position.set(sign * size * .45, .12, (i - (n - 1) / 2) * size * .7); body.add(leg); branch(leg, [[0, size * .2, 0], [sign * size * .8, size * .42, .08], [sign * size * 1.05, -.09, .12]], size * .09, darkWood, 5, 4); legs.push({ object: leg, phase: i * 1.8 + (sign < 0 ? 2 : 0), base: leg.rotation.z }); }
@@ -371,10 +371,11 @@ export function createGameScene(world, engine, callbacks = {}) {
     for (const [id, object] of enemyMeshes) if (!enemyIds.has(id)) { releaseObject(object); enemyMeshes.delete(id); }
     for (const enemy of engine.enemies) {
       let object = enemyMeshes.get(enemy.id); if (!object || object.userData.type !== enemy.type) { if (object) releaseObject(object); object = makeEnemy(enemy); enemyMeshes.set(enemy.id, object); group.add(object); }
-      object.position.set(enemy.x, .04, enemy.z); let angle = enemy.angle - object.userData.body.rotation.y; angle = Math.atan2(Math.sin(angle), Math.cos(angle)); object.userData.body.rotation.y += angle * (1 - Math.exp(-dt * 13));
+      const visual = object.userData.renderPosition, follow = 1 - Math.exp(-dt * 28); visual.x += (enemy.x - visual.x) * follow; visual.y += (enemy.z - visual.y) * follow;
+      object.position.set(visual.x, .04, visual.y); let angle = enemy.angle - object.userData.body.rotation.y; angle = Math.atan2(Math.sin(angle), Math.cos(angle)); object.userData.body.rotation.y += angle * (1 - Math.exp(-dt * 13));
       const walking = engine.time * enemy.speed * 11 + enemy.seed * 7; object.userData.body.position.y = Math.sin(walking * 2) * .018; object.userData.body.rotation.z = Math.sin(walking) * .035;
       object.userData.legs.forEach(leg => { leg.object.rotation.y = Math.sin(walking + leg.phase) * .34; leg.object.rotation.z = Math.cos(walking + leg.phase) * .15; });
-      object.userData.material.emissive.set(enemy.slowUntil > engine.time ? '#426c7d' : '#8b5030'); object.userData.material.emissiveIntensity = enemy.slowUntil > engine.time ? .25 : Math.max(0, 1 - (engine.time - enemy.hitAt) * 7) * .6;
+      const slowed = enemy.slowUntil > engine.time; if (object.userData.slowVisual !== slowed) { object.userData.material.emissive.set(slowed ? '#426c7d' : '#8b5030'); object.userData.slowVisual = slowed; } object.userData.material.emissiveIntensity = slowed ? .25 : Math.max(0, 1 - (engine.time - enemy.hitAt) * 7) * .6;
       object.userData.health.quaternion.copy(camera.quaternion); const hp = Math.max(0, enemy.hp / enemy.maxHp); object.userData.bar.scale.x = hp; object.userData.bar.position.x = -(1 - hp) * object.userData.healthWidth / 2; object.userData.bar.material.color.set(hp > .35 ? '#cdd8a1' : '#d8a084'); object.userData.health.visible = hp < .99 || enemy.type === 'boss';
       if (object.userData.shield) object.userData.shield.rotation.y = elapsed * .3;
     }

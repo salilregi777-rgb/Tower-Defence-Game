@@ -42,7 +42,7 @@ const homePosition={x:0,y:0,z:1400};
 function frame(dt,time){
  if(document.hidden)return;
  qualityClock+=dt;qualityFrames++;
- if(qualityClock>4&&mode==='game'){const fps=qualityFrames/qualityClock;slowWindows=fps<32?slowWindows+1:0;if(slowWindows>=2&&world.renderer.getPixelRatio()>1){world.renderer.setPixelRatio(Math.max(1,world.renderer.getPixelRatio()-.25));world.renderer.setSize(world.renderer.domElement.clientWidth,world.renderer.domElement.clientHeight,false);slowWindows=0;}qualityClock=0;qualityFrames=0;}
+ if(qualityClock>4&&mode==='game'){const fps=qualityFrames/qualityClock;slowWindows=fps<48?slowWindows+1:0;if(slowWindows>=1&&world.renderer.getPixelRatio()>1){world.renderer.setPixelRatio(Math.max(1,world.renderer.getPixelRatio()-.25));world.renderer.setSize(world.renderer.domElement.clientWidth,world.renderer.domElement.clientHeight,false);slowWindows=0;}qualityClock=0;qualityFrames=0;}
  if(progress!==destination){const duration=reduced?.18:(destination?2.35:1.85);progress=Math.max(0,Math.min(1,progress+(destination?1:-1)*dt/duration));const p=progress*progress*progress*(progress*(progress*6-15)+10);
   document.body.style.setProperty('--world-progress',p.toFixed(4));
   if(progress===1){mode='game';engine.paused=wasPaused;view.setActive(true);ui.setVisible(true);$('.stage').style.visibility='hidden';$('.dock-wrap').style.visibility='hidden';}
