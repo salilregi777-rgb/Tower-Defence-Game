@@ -5,7 +5,7 @@ export class JavaGameEngine {
   constructor() {
     this._state = { difficulty: 3, health: 100, coins: 200, wave: 1, phase: 'ready', paused: true, speed: 1, time: 0, towers: [], enemies: [], projectiles: [], queue: [], path: [], grid: [], history: [], selectedTowerId: null, undoCount: 0, redoCount: 0, waveTotal: 0 };
     this._inspector = { queue: [], queueMeta: { head: 0, tail: 0, capacity: 128, size: 0 }, linkedList: [], heap: [], bst: null, bstOrdered: [], undo: [], redo: [], history: [], btreeSplits: 0, operations: [], upgrades: [], bfs: { path: [], order: [], visited: [], grid: [], steps: 0 } };
-    this._effects = []; this._previous = null; this.connected = false; this.inspectorVisible = false; this._inspectorRequest = null;
+    this._effects = []; this._previous = null; this._stateReceivedAt = performance.now(); this.connected = false; this.inspectorVisible = false; this._inspectorRequest = null;
     this.undoStack = { get size() { return engine.undoCount; }, isEmpty: () => engine.undoCount === 0 };
     this.redoStack = { get size() { return engine.redoCount; }, isEmpty: () => engine.redoCount === 0 };
     this.spawnQueue = { get size() { return engine._state.queueSize || 0; } };
@@ -20,7 +20,7 @@ export class JavaGameEngine {
       if (!response.ok) throw new Error(`Java backend returned ${response.status}`);
       const packet = await response.json(), next = packet.state;
       if (this._previous) this.captureEffects(this._previous, next);
-      this._state = next; if (packet.inspector) this._inspector = packet.inspector; this._previous = next; this.connected = true;
+      this._state = next; if (packet.inspector) this._inspector = packet.inspector; this._previous = next; this._stateReceivedAt = performance.now(); this.connected = true;
     } catch (error) { this.connected = false; if (!this._reported) { console.error('SYLVA Java backend:', error); this._reported = true; } }
   }
   setInspectorVisible(value) { this.inspectorVisible = Boolean(value); if (this.inspectorVisible) void this.refreshInspector(); }
@@ -49,7 +49,7 @@ export class JavaGameEngine {
   async request(action, fields = {}) {
     try {
       const response = await fetch('/api/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, ...fields }) });
-      const packet = await response.json(); if (packet.state) { if (this._previous) this.captureEffects(this._previous, packet.state); this._state = packet.state; this._inspector = packet.inspector; this._previous = packet.state; this.connected = true; }
+      const packet = await response.json(); if (packet.state) { if (this._previous) this.captureEffects(this._previous, packet.state); this._state = packet.state; this._inspector = packet.inspector; this._previous = packet.state; this._stateReceivedAt = performance.now(); this.connected = true; }
       if (!packet.ok) window.dispatchEvent(new CustomEvent('sylva-backend-message', { detail: packet.message }));
       return packet;
     } catch (error) { console.error('SYLVA Java backend:', error); this.connected = false; window.dispatchEvent(new CustomEvent('sylva-backend-message', { detail: 'The Java backend is not connected. Restart it, then reload the grove.' })); return { ok: false, message: 'Start the Java backend, then reload the grove.' }; }
@@ -60,6 +60,8 @@ export class JavaGameEngine {
   get wave() { return this._state.wave; }
   get phase() { return this._state.phase; }
   get speed() { return this._state.speed; }
+  /** Wall-clock time since Java's last authoritative snapshot, for 60 Hz visual extrapolation. */
+  get presentationDelta() { return Math.min(.12, Math.max(0, (performance.now() - this._stateReceivedAt) / 1000)) * (this.speed || 1); }
   get time() { return this._state.time; }
   get towers() { return this._state.towers; }
   get enemies() { return this._state.enemies; }

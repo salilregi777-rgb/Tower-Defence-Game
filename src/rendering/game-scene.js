@@ -353,6 +353,7 @@ export function createGameScene(world, engine, callbacks = {}) {
   function update(dt, time) {
     if (!active && !group.visible) return;
     elapsed = typeof time === 'number' ? time : elapsed + dt; windUniform.value = reducedMotion ? 0 : elapsed;
+    const presentationDelta = engine.presentationDelta;
     consumeEffects();
     const towerIds = new Set(engine.towers.map(t => t.id));
     for (const [id, object] of towerMeshes) if (!towerIds.has(id)) { releaseObject(object); towerMeshes.delete(id); }
@@ -371,8 +372,15 @@ export function createGameScene(world, engine, callbacks = {}) {
     for (const [id, object] of enemyMeshes) if (!enemyIds.has(id)) { releaseObject(object); enemyMeshes.delete(id); }
     for (const enemy of engine.enemies) {
       let object = enemyMeshes.get(enemy.id); if (!object || object.userData.type !== enemy.type) { if (object) releaseObject(object); object = makeEnemy(enemy); enemyMeshes.set(enemy.id, object); group.add(object); }
-      const visual = object.userData.renderPosition, follow = 1 - Math.exp(-dt * 28); visual.x += (enemy.x - visual.x) * follow; visual.y += (enemy.z - visual.y) * follow;
-      object.position.set(visual.x, .04, visual.y); let angle = enemy.angle - object.userData.body.rotation.y; angle = Math.atan2(Math.sin(angle), Math.cos(angle)); object.userData.body.rotation.y += angle * (1 - Math.exp(-dt * 13));
+      // Java remains authoritative at 60 Hz. Its HTTP snapshots arrive less often,
+      // so advance along the Java path using snapshot age instead of smoothing
+      // behind stale positions (which made enemies visibly trail and jitter).
+      const path = engine.path, progress = Math.min(path.length - 1, enemy.progress + enemy.velocity * presentationDelta), pathIndex = Math.floor(progress), fraction = progress - pathIndex;
+      const from = path[pathIndex], to = path[Math.min(pathIndex + 1, path.length - 1)];
+      const x = from && to ? from.x + (to.x - from.x) * fraction : enemy.x;
+      const z = from && to ? from.z + (to.z - from.z) * fraction : enemy.z;
+      object.userData.renderPosition.set(x, z); object.position.set(x, .04, z);
+      let angle = enemy.angle - object.userData.body.rotation.y; angle = Math.atan2(Math.sin(angle), Math.cos(angle)); object.userData.body.rotation.y += angle * (1 - Math.exp(-dt * 13));
       const walking = engine.time * enemy.speed * 11 + enemy.seed * 7; object.userData.body.position.y = Math.sin(walking * 2) * .018; object.userData.body.rotation.z = Math.sin(walking) * .035;
       object.userData.legs.forEach(leg => { leg.object.rotation.y = Math.sin(walking + leg.phase) * .34; leg.object.rotation.z = Math.cos(walking + leg.phase) * .15; });
       const slowed = enemy.slowUntil > engine.time; if (object.userData.slowVisual !== slowed) { object.userData.material.emissive.set(slowed ? '#426c7d' : '#8b5030'); object.userData.slowVisual = slowed; } object.userData.material.emissiveIntensity = slowed ? .25 : Math.max(0, 1 - (engine.time - enemy.hitAt) * 7) * .6;
@@ -382,9 +390,13 @@ export function createGameScene(world, engine, callbacks = {}) {
     const projectiles = engine.projectiles.toArray(), projectileIds = new Set(projectiles.map(p => p.id));
     for (const [id, object] of projectileMeshes) if (!projectileIds.has(id)) { releaseObject(object); projectileMeshes.delete(id); }
     for (const projectile of projectiles) {
-      let object = projectileMeshes.get(projectile.id); if (!object) { object = new THREE.Group(); const color = TOWER_TYPES[projectile.type].color; if (projectile.type === 'archer') { const thorn = mesh(geom(new THREE.ConeGeometry(.04, .38, 5)), paleLeaf, object); thorn.rotation.x = Math.PI / 2; } else { orb(object, [0, 0, 0], projectile.type === 'cannon' ? .15 : .085, projectile.type === 'cannon' ? gold : frost); glow(object, color, projectile.type === 'cannon' ? .48 : .58, [0, 0, 0], .35); } const trailPositions = new Float32Array(21), trailGeo = geom(new THREE.BufferGeometry()); trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3)); const trailMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: .42 }); ownedMaterials.add(trailMat); const trail = new THREE.Line(trailGeo, trailMat); group.add(trail); object.userData.trail = trail; object.userData.history = []; projectileMeshes.set(projectile.id, object); group.add(object); }
-      object.position.set(projectile.x, projectile.y, projectile.z); if (Math.hypot(projectile.vx, projectile.vy, projectile.vz) > .01) object.lookAt(projectile.x + projectile.vx, projectile.y + projectile.vy, projectile.z + projectile.vz);
-      const history = object.userData.history; history.unshift(object.position.clone()); if (history.length > 7) history.pop(); const positions = object.userData.trail.geometry.attributes.position; for (let i = 0; i < 7; i++) { const p = history[Math.min(i, history.length - 1)]; positions.setXYZ(i, p.x, p.y, p.z); } positions.needsUpdate = true;
+      let object = projectileMeshes.get(projectile.id); if (!object) { object = new THREE.Group(); const color = TOWER_TYPES[projectile.type].color; if (projectile.type === 'archer') { const thorn = mesh(geom(new THREE.ConeGeometry(.04, .38, 5)), paleLeaf, object); thorn.rotation.x = Math.PI / 2; } else { orb(object, [0, 0, 0], projectile.type === 'cannon' ? .15 : .085, projectile.type === 'cannon' ? gold : frost); glow(object, color, projectile.type === 'cannon' ? .48 : .58, [0, 0, 0], .35); } const trailGeo = geom(new THREE.BufferGeometry()); trailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(21), 3)); const trailMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: .42 }); ownedMaterials.add(trailMat); const trail = new THREE.Line(trailGeo, trailMat); group.add(trail); object.userData.trail = trail; object.userData.history = new Float32Array(21); object.userData.historyCount = 0; projectileMeshes.set(projectile.id, object); group.add(object); }
+      const ahead = presentationDelta, simAge = projectile.age + ahead;
+      let px = projectile.x + projectile.vx * ahead, py = projectile.y + projectile.vy * ahead, pz = projectile.z + projectile.vz * ahead;
+      if (projectile.type === 'cannon' && projectile.duration > 0) { const f = Math.min(1, simAge / projectile.duration); px = projectile.originX + (projectile.targetX - projectile.originX) * f; pz = projectile.originZ + (projectile.targetZ - projectile.originZ) * f; py = 1.15 * (1 - f) + 12.8 * f * (1 - f); }
+      object.position.set(px, py, pz); if (Math.hypot(projectile.vx, projectile.vy, projectile.vz) > .01) object.lookAt(px + projectile.vx, py + projectile.vy, pz + projectile.vz);
+      const history = object.userData.history; for (let i = 6; i > 0; i--) { history[i * 3] = history[(i - 1) * 3]; history[i * 3 + 1] = history[(i - 1) * 3 + 1]; history[i * 3 + 2] = history[(i - 1) * 3 + 2]; } history[0] = px; history[1] = py; history[2] = pz; object.userData.historyCount = Math.min(7, object.userData.historyCount + 1);
+      const positions = object.userData.trail.geometry.attributes.position; for (let i = 0; i < 7; i++) { const j = Math.min(i, object.userData.historyCount - 1) * 3; positions.setXYZ(i, history[j], history[j + 1], history[j + 2]); } positions.needsUpdate = true;
     }
     // Removed projectiles carry their trail outside their group.
     for (let i = group.children.length - 1; i >= 0; i--) { const child = group.children[i]; if (child.isLine && child.userData.projectileTrail && !projectileIds.has(child.userData.projectileTrail)) group.remove(child); }
