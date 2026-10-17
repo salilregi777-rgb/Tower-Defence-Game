@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CircularQueue, Stack, LinkedList, MaxHeap, BinarySearchTree, BinaryTree, BTree, bfs } from '../src/dsa/structures.js';
-import { GameEngine, TOWER_TYPES } from '../src/game/engine.js';
+import { GameEngine, TOWER_TYPES } from '../src/game/reference-engine.js';
 import { generateWave } from '../src/game/config.js';
 
 const engine = () => new GameEngine({ storage: null });

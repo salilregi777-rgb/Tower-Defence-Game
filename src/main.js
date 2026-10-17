@@ -28,7 +28,7 @@ function enter(e){e?.preventDefault();if(!view){showError('The living world is s
 function home(){if(destination===0)return;wasPaused=engine.paused;engine.paused=true;destination=0;mode='leaving';ui.setVisible(false);chooseTower(null);view.setActive(false);view.group.visible=true;}
 function restart(){engine.restart();wasPaused=false;chooseTower(null);ui.notify('A new grove awaits.');}
 function showError(message){let el=$('.world-error');if(!el){el=document.createElement('div');el.className='world-error';document.body.append(el);}el.textContent=message;setTimeout(()=>el.remove(),6000);}
-function init(){if(world||!window.sylvaWorld)return;world=window.sylvaWorld;
+function init(){if(world||!window.sylvaWorld)return;if(!engine.connected){if(!engine._waitingForJava){engine._waitingForJava=true;engine.ready.then(()=>{engine._waitingForJava=false;if(engine.connected)init();else showError('The Java grove service is not running. Start the project with npm run dev, then reload.');});}return;}world=window.sylvaWorld;
  try{
  view=createGameScene(world,engine,{onCell(col,row){if(mode!=='game')return;if(buildType){const result=notify(engine.place(buildType,col,row));if(result.ok)chooseTower(null);}else{const tower=engine.towers.find(t=>t.col===col&&t.row===row);engine.selectTower(tower?.id??null);}},onSelectTower(id){chooseTower(null);engine.selectTower(id);},effect:e=>audio.effect(e)});
  view.resize?.();view.group.visible=false;view.setActive(false);
@@ -74,4 +74,5 @@ $('#scene').addEventListener('webglcontextlost',e=>{e.preventDefault();engine.pa
 $('#scene').addEventListener('webglcontextrestored',()=>{ui?.notify('Graphics restored. Resume when ready.');},{signal});
 window.addEventListener('resize',()=>view?.resize?.(),{signal});
 window.addEventListener('sylva-ready',()=>queueMicrotask(init),{signal});if(window.sylvaWorld)init();
+window.addEventListener('sylva-backend-message',event=>showError(event.detail),{signal});
 window.addEventListener('pagehide',event=>{engine.save();if(event.persisted){engine.paused=true;return;}audio.dispose();ui?.dispose();view?.dispose();window.sylvaFrame=null;abort.abort();},{once:true});

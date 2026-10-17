@@ -2,15 +2,19 @@
 
 A browser-local tower defense game built into the original Sylva Living Green environment. The homepage and battlefield share one Three.js renderer, frame loop, locally packaged Lexend typeface, botanical palette, and authored moss materials. No account, build dependencies, or remote asset requests are needed to play.
 
+## Java backend with Three.js UI
+
+The existing animated homepage and battlefield remain browser UI written in JavaScript/Three.js. Game state, rules, simulation steps, and DSA operations run in the JDK-only Java service. The browser talks to that service through the local development server; JavaScript does not simulate combat.
+
 ## Run
 
-Requires Node.js 18 or newer:
+Requires Java 21 or newer:
 
 ```sh
-node scripts/serve.mjs
+npm run dev
 ```
 
-Open http://127.0.0.1:5173. If Node is installed in the usual PATH, `npm run dev` is equivalent. To generate a portable static deployment, run `node scripts/build.mjs`; serve the resulting `dist/` directory from its root. Serve over HTTP rather than opening index.html as a file, because the game uses browser ES modules.
+Or run `./run-local.sh` directly if you do not have npm installed. Open http://127.0.0.1:5174 and leave the terminal open while playing. The Java process serves the browser assets and runs the API; JavaScript/Three.js handles presentation and input. The static `dist/` build is for visual review only; gameplay needs the Java API and is launched through the local Java server.
 
 ## Play
 
@@ -34,8 +38,10 @@ Saved games and wave history stay in this browser's local storage. Save/load inc
 - `scripts/adapt-source.py`: reproducible asset localization, copy changes, and shared-renderer integration hook
 - `src/main.js`: homepage actions, cinematic camera journey, input and lifecycle coordination
 - `src/rendering/game-scene.js`: battlefield, guardians, invaders, preview/range, particles and impacts
-- `src/game/`: deterministic 60 Hz simulation, balance, upgrade branches, transactions and persistence
-- `src/dsa/structures.js`: hand-written circular queue, stack, linked list, max heap, BST, binary tree, B-tree and BFS
+- `src/game/java-engine.js`: browser-side view model and Java API transport only
+- `java/src/sylva/model/GameEngine.java`: authoritative deterministic simulation, balance, upgrades, and persistence
+- `java/src/sylva/server/GameServer.java`: localhost JSON API for the browser UI
+- `java/src/sylva/dsa/`: circular queue, stack, linked list, max heap, BST, binary tree, B-tree, and BFS
 - `src/ui/`: responsive HUD and inspector of the actual gameplay structures
 - `src/audio.js`: procedural ambient/firing/impact sound
 - `docs/DSA.md`: implementation and complexity notes for project explanation
@@ -48,7 +54,7 @@ node --test tests/*.test.js
 node scripts/build.mjs
 ```
 
-The simulation suite covers all tower attacks, resistance and boss behavior, target comparators, branching upgrades, undo/redo economics, valid BFS paths, 30/60/120 FPS equivalence, deterministic save/load, ten-wave victory, defeat, restart, and B-tree split invariants.
+The Java checks cover structure invariants, path search, wave balance, undo/redo, upgrades, and full-campaign outcomes. The original browser simulation is retained only as a regression reference in `src/game/reference-engine.js`; it is not used at runtime.
 
 The renderer adapts pixel density to frame time on capable devices; actual FPS depends on hardware, viewport size, and browser. Reduced-motion preferences shorten the camera journey and reduce decorative motion. Opening the field guide explains the game and its structures without leaving the living world.
 

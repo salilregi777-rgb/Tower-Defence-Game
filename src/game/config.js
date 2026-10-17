@@ -1,4 +1,3 @@
-import { BinaryTree } from '../dsa/structures.js';
 
 export const DEFAULT_DIFFICULTY = 3;
 // Multipliers are applied once when a wave is queued or an enemy is created.
@@ -29,9 +28,10 @@ export const ENEMY_TYPES = Object.freeze({
 function node(id, name, cost, description, modifiers, left = null, right = null) { return { id, name, cost, description, modifiers, left, right }; }
 export function createUpgradeTrees() {
   const result = {};
+  const tree = root => ({ root, search(id, node = root) { if (!node) return null; if (node.id === id) return node; return this.search(id, node.left) || this.search(id, node.right); }, children(id) { const node = this.search(id); return node ? [node.left, node.right].filter(Boolean) : []; } });
   for (const [type, stats] of Object.entries(TOWER_TYPES)) {
     const c = Math.round(stats.cost * 0.85);
-    result[type] = new BinaryTree(node('root', stats.name, 0, stats.description, {},
+    result[type] = tree(node('root', stats.name, 0, stats.description, {},
       node('power', 'Deep roots', c, '+65% damage, +0.25 reach', { damage: 1.65, range: 0.25 },
         node('power-force', 'Ancient force', Math.round(c * 1.6), '+80% damage', { damage: 1.8 }),
         node('power-reach', 'Canopy reach', Math.round(c * 1.45), '+1.6 reach, +20% damage', { range: 1.6, damage: 1.2 })),
